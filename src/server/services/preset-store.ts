@@ -230,12 +230,6 @@ export type ScanReport = {
   xmlStatus: string;
   fiveMbStatus: string;
   confidence: number;
-  viewCount: number | null;
-  favoriteCount: number | null;
-  discoverySource: string | null;
-  viewCount: number;
-  favoriteCount: number;
-  discoverySource: string;
   xmlUrl: string | null;
   fiveMbUrl: string | null;
   xmlSource: string | null;
@@ -332,9 +326,6 @@ async function loadStoredLinks(presetId: string): Promise<LinkCandidate[]> {
     url: row.url,
     kind: (row.kind === "xml" || row.kind === "five_mb" ? row.kind : "unknown") as LinkCandidate["kind"],
     confidence: row.confidence,
-    viewCount: row.viewCount ?? 0,
-    favoriteCount: row.favoriteCount ?? 0,
-    discoverySource: row.discoverySource ?? "manual",
     hostLabel: row.hostLabel ?? "unknown",
     sourceType: (row.sourceType as LinkCandidate["sourceType"]) ?? "related_search",
     sourceRef: row.sourceRef ?? "tersimpan dari scan sebelumnya",
@@ -938,6 +929,9 @@ export type PresetListItem = {
   fiveMbStatus: string;
   overallStatus: string;
   confidence: number;
+  viewCount: number;
+  favoriteCount: number;
+  discoverySource: string;
   xmlUrl: string | null;
   fiveMbUrl: string | null;
   likes: number | null;
@@ -1003,6 +997,9 @@ type BaseRow = {
   fiveMbStatus: string;
   overallStatus: string;
   confidence: number;
+  viewCount: number | null;
+  favoriteCount: number | null;
+  discoverySource: string | null;
   xmlUrl: string | null;
   fiveMbUrl: string | null;
   stats: { plays?: number | null; likes?: number | null; comments?: number | null; shares?: number | null } | null;
@@ -1038,6 +1035,9 @@ function mapRow(row: BaseRow): PresetListItem {
     fiveMbStatus: row.fiveMbStatus,
     overallStatus: scanning ? "SCANNING" : row.overallStatus,
     confidence: row.confidence,
+    viewCount: row.viewCount ?? 0,
+    favoriteCount: row.favoriteCount ?? 0,
+    discoverySource: row.discoverySource ?? "manual",
     xmlUrl: row.xmlUrl,
     fiveMbUrl: row.fiveMbUrl,
     likes: row.stats?.likes ?? null,
