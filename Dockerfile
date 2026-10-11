@@ -1,4 +1,4 @@
-# Railway — Next.js + Baileys (persistent process)
+# Railway — Next.js + Baileys
 FROM node:22-bookworm-slim AS deps
 WORKDIR /app
 RUN apt-get update -y && apt-get install -y --no-install-recommends ca-certificates python3 make g++ \
@@ -12,8 +12,9 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
-# Fail fast if critical UI files are missing from the upload
-RUN test -f src/components/shell.tsx && test -f src/components/perf.tsx && test -f src/app/layout.tsx
+# Debug: show what was actually uploaded (helps if Git/Railway root is wrong)
+RUN echo "=== source tree ===" && find src -type f | head -80 && echo "=== end ==="
+RUN test -f src/app/layout.tsx && test -f src/app/shell.tsx && test -f src/app/perf.tsx
 RUN npm run build
 
 FROM node:22-bookworm-slim AS runner
@@ -22,7 +23,6 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
-# Session path for Baileys — mount a Railway Volume at /data in the dashboard if you need persistence
 ENV WA_SESSION_DIR=/data/.spaceprs-session
 RUN mkdir -p /data/.spaceprs-session /app/public
 COPY --from=builder /app/public ./public

@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
-import { AppShell } from "@/components/shell";
-import { FpsMeter, PerfTuner } from "@/components/perf";
+import { AppShell } from "./shell";
+import { FpsMeter, PerfTuner } from "./perf";
 
 export const metadata: Metadata = {
   title: "预设空间 | Preset Space — Find it. Preset it. Create it.",
