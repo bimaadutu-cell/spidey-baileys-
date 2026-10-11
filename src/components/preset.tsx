@@ -177,15 +177,15 @@ export function PresetCard({ preset, compact = false }: { preset: PresetItem; co
               {(preset.favoriteCount ?? 0) > 0 ? ` · ♥ ${formatCount(preset.favoriteCount ?? 0)}` : ""}
             </p>
             {preset.xmlUrl ? (
-              <a href={preset.xmlUrl} target="_blank" rel="noopener noreferrer nofollow" className="btn btn-primary flex-1 !py-1.5 !text-[11px]">
-                XML
+              <a href={preset.xmlUrl} target="_blank" rel="noopener noreferrer nofollow" className="btn-xml">
+                ⬇ Buka XML
               </a>
             ) : (
               <span className="btn flex-1 !py-1.5 !text-[11px] !text-slate-400">XML —</span>
             )}
             {preset.fiveMbUrl ? (
-              <a href={preset.fiveMbUrl} target="_blank" rel="noopener noreferrer nofollow" className="btn flex-1 !py-1.5 !text-[11px]">
-                5MB
+              <a href={preset.fiveMbUrl} target="_blank" rel="noopener noreferrer nofollow" className="btn-5mb">
+                ⬇ Buka 5MB
               </a>
             ) : (
               <span className="btn flex-1 !py-1.5 !text-[11px] !text-slate-400">5MB —</span>

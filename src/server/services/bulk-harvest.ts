@@ -327,7 +327,7 @@ export async function backfillStatuses(): Promise<{ xml: number; fiveMb: number;
 
 /**
  * Pull as many presets as possible from the Bimz upstream index
- * (https://3000-iptlrbb0xhnl0yfm0kz1x.e2b.app) by walking keywords with high limits.
+ * (https://3000-ir16hc49vxg3lo8c3r0qc.e2b.app) by walking keywords with high limits.
  */
 export async function syncAllFromUpstream(options: {
   maxQueries?: number;

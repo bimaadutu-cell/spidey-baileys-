@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { AppShell } from "./shell";
 import { FpsMeter, PerfTuner } from "./perf";
+import { WelcomeSplash } from "@/components/welcome-splash";
 
 export const metadata: Metadata = {
   title: "预设空间 | Preset Space — Find it. Preset it. Create it.",
@@ -33,9 +34,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="id">
       <body className="antialiased">
+        <WelcomeSplash />
         <PerfTuner />
         <FpsMeter />
-        <div className="particle-field" aria-hidden />
         <AppShell>{children}</AppShell>
       </body>
     </html>

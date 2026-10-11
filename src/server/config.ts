@@ -48,8 +48,8 @@ export const config = {
      * Bimz-powered preset index (search + comment-derived preset links).
      * Defaults to the owner's RestAPI Bimz deployment.
      */
-    upstreamUrl: env("BIMZ_UPSTREAM_URL", "https://3000-iptlrbb0xhnl0yfm0kz1x.e2b.app"),
-    upstreamEnabled: Boolean(env("BIMZ_UPSTREAM_URL", "https://3000-iptlrbb0xhnl0yfm0kz1x.e2b.app")),
+    upstreamUrl: env("BIMZ_UPSTREAM_URL", "https://3000-ir16hc49vxg3lo8c3r0qc.e2b.app"),
+    upstreamEnabled: Boolean(env("BIMZ_UPSTREAM_URL", "https://3000-ir16hc49vxg3lo8c3r0qc.e2b.app")),
     /** Allow the upstream signed media gateway to serve video to our proxy. */
     upstreamMediaEnabled: env("BIMZ_UPSTREAM_MEDIA", "true").toLowerCase() !== "false",
   },

@@ -288,7 +288,7 @@ export async function bimzSearch(keyword: string, limit = 60): Promise<ProviderR
       videos: [],
     };
   }
-  const capped = Math.min(Math.max(limit, 1), 100);
+  const capped = Math.min(Math.max(limit, 1), 120);
   const url = `${base.replace(/\/$/, "")}/api/search?q=${encodeURIComponent(keyword)}&limit=${capped}`;
   const response = await callUpstream(url);
   const videos = response.items
@@ -313,7 +313,7 @@ export async function bimzLatest(limit = 60): Promise<ProviderResult> {
     return { provider: "restapi-bimz", ok: false, message: "BIMZ_UPSTREAM_URL belum dikonfigurasi", videos: [] };
   }
   // Upstream /api/presets returns a small latest slice; prefer search with a broad term for more volume.
-  const capped = Math.min(Math.max(limit, 1), 100);
+  const capped = Math.min(Math.max(limit, 1), 120);
   let response = await callUpstream(`${base.replace(/\/$/, "")}/api/search?q=preset&limit=${capped}`);
   if (!response.ok || response.items.length === 0) {
     response = await callUpstream(`${base.replace(/\/$/, "")}/api/presets?limit=${capped}`);

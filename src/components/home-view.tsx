@@ -43,8 +43,8 @@ const QUICK_KEYWORDS = [
 export function HomeView({ initialQuery, favoritesOnly }: { initialQuery: string; favoritesOnly: boolean }) {
   const [term, setTerm] = useState(initialQuery);
   const debounced = useDebounced(term, 350);
-  const [filter, setFilter] = useState("");
-  const [sort, setSort] = useState("latest");
+  const [filter, setFilter] = useState("complete");
+  const [sort, setSort] = useState("confidence");
   const [category, setCategory] = useState("all");
   const [creator, setCreator] = useState("");
   const [scanKeyword, setScanKeyword] = useState("preset alight motion");
@@ -168,7 +168,7 @@ export function HomeView({ initialQuery, favoritesOnly }: { initialQuery: string
         <div className="pointer-events-none absolute -right-16 -top-20 h-64 w-64 rounded-full bg-white/10 blur-3xl" />
         <span className="chip">预设空间 · PRESET SPACE</span>
         <h1 className="mt-4 max-w-3xl text-3xl font-black leading-tight neon-text sm:text-5xl">
-          Find it. Preset it. <span className="text-slate-400">Create it.</span>
+          Welcome to <span className="text-amber-300">Preset Space</span>
         </h1>
         <p className="mt-4 max-w-2xl text-sm leading-relaxed text-slate-400 sm:text-base">
           Preset Space menemukan preset Alight Motion dari konten publik TikTok, memindai caption &amp; komentar,

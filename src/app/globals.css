@@ -1,146 +1,87 @@
 @import "tailwindcss";
 
 @theme {
-  --color-ink: #050505;
-  --color-ink-2: #0a0a0f;
-  --color-silver: #c9d0dc;
-  --color-mist: #8b93a3;
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
-  --radius-xl2: 1.35rem;
+  --color-ink: #07070a;
+  --color-silver: #d5dbe8;
+  --color-mist: #8e96a8;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
 }
 
 :root {
   color-scheme: dark;
-  --glass: rgba(255, 255, 255, 0.045);
-  --glass-strong: rgba(255, 255, 255, 0.075);
-  --line: rgba(255, 255, 255, 0.12);
-  --line-strong: rgba(255, 255, 255, 0.22);
-  --glow: 0 0 0 1px rgba(255, 255, 255, 0.08), 0 18px 50px -18px rgba(255, 255, 255, 0.18);
+  --bg: #07070a;
+  --panel: #121218;
+  --panel-2: #18181f;
+  --line: rgba(255, 255, 255, 0.1);
+  --line-2: rgba(255, 255, 255, 0.18);
+  --text: #f4f6fb;
+  --muted: #9aa3b5;
+  --accent: #ffd36a;
+  --accent-2: #ff7a45;
+  --ok: #5dffb1;
 }
 
 * {
   -webkit-tap-highlight-color: transparent;
+  box-sizing: border-box;
 }
 
-html,
-body {
-  background: #050505;
-  color: #f3f5f9;
+html {
+  background: var(--bg);
+  color: var(--text);
   font-family: var(--font-sans);
-  scroll-behavior: smooth;
+  /* Prefer compositor smoothness over heavy effects */
+  scroll-behavior: auto;
 }
 
 body {
   min-height: 100dvh;
-  background-image:
-    radial-gradient(900px 520px at 12% -8%, rgba(255, 255, 255, 0.09), transparent 60%),
-    radial-gradient(760px 460px at 92% 4%, rgba(190, 200, 220, 0.07), transparent 62%),
-    linear-gradient(180deg, #050505 0%, #07070b 45%, #050505 100%);
-  background-attachment: fixed;
+  margin: 0;
+  background:
+    radial-gradient(700px 360px at 10% -10%, rgba(255, 211, 106, 0.08), transparent 55%),
+    radial-gradient(560px 320px at 100% 0%, rgba(255, 122, 69, 0.07), transparent 50%),
+    var(--bg);
   overflow-x: hidden;
+  text-rendering: optimizeSpeed;
+  -webkit-font-smoothing: antialiased;
 }
 
 ::selection {
-  background: rgba(255, 255, 255, 0.9);
-  color: #050505;
+  background: var(--accent);
+  color: #111;
 }
 
-/* thin neon scrollbar */
-::-webkit-scrollbar {
-  width: 9px;
-  height: 9px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
+::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.18);
   border-radius: 999px;
 }
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.28);
-}
 
+/* ---- lightweight surfaces (no heavy blur on mobile) ---- */
 @utility glass {
-  background: var(--glass);
-  backdrop-filter: blur(18px) saturate(140%);
-  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  background: rgba(18, 18, 24, 0.92);
   border: 1px solid var(--line);
 }
 
 @utility glass-strong {
-  background: var(--glass-strong);
-  backdrop-filter: blur(26px) saturate(160%);
-  -webkit-backdrop-filter: blur(26px) saturate(160%);
-  border: 1px solid var(--line-strong);
-  box-shadow: var(--glow);
+  background: rgba(22, 22, 30, 0.96);
+  border: 1px solid var(--line-2);
 }
 
 @utility card-3d {
-  background:
-    linear-gradient(160deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.02) 42%, rgba(0, 0, 0, 0.25)),
-    #08080c;
+  background: linear-gradient(165deg, #1a1a22 0%, #101016 100%);
   border: 1px solid var(--line);
-  box-shadow:
-    0 1px 0 0 rgba(255, 255, 255, 0.08) inset,
-    0 24px 60px -32px rgba(0, 0, 0, 0.95);
-  transition: transform 0.35s cubic-bezier(0.2, 0.7, 0.2, 1), box-shadow 0.35s ease, border-color 0.35s ease;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  transform: translateZ(0);
 }
 
 @utility card-3d-hover {
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+@utility card-3d-hover {
   &:hover {
-    transform: translateY(-4px);
-    border-color: rgba(255, 255, 255, 0.3);
-    box-shadow:
-      0 1px 0 0 rgba(255, 255, 255, 0.14) inset,
-      0 30px 70px -30px rgba(255, 255, 255, 0.16);
-  }
-}
-
-@utility neon-text {
-  color: #ffffff;
-  text-shadow: 0 0 18px rgba(255, 255, 255, 0.45), 0 0 60px rgba(255, 255, 255, 0.12);
-}
-
-@utility silver-line {
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.35), transparent);
-  height: 1px;
-}
-
-@utility btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  border-radius: 999px;
-  padding: 0.62rem 1.15rem;
-  font-size: 0.875rem;
-  font-weight: 600;
-  transition: transform 0.18s ease, background 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
-  cursor: pointer;
-  border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.06);
-  color: #f4f6fa;
-  &:hover {
-    background: rgba(255, 255, 255, 0.12);
-    border-color: var(--line-strong);
-  }
-  &:active {
-    transform: scale(0.97);
-  }
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-}
-
-@utility btn-primary {
-  background: linear-gradient(180deg, #ffffff, #dfe4ec);
-  color: #06060a;
-  border: 1px solid #ffffff;
-  box-shadow: 0 12px 40px -18px rgba(255, 255, 255, 0.7);
-  &:hover {
-    background: linear-gradient(180deg, #ffffff, #f2f5fa);
+    transform: translateY(-2px);
+    border-color: var(--line-2);
   }
 }
 
@@ -150,440 +91,217 @@ body {
   gap: 0.35rem;
   border-radius: 999px;
   border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.05);
-  padding: 0.3rem 0.7rem;
-  font-size: 0.72rem;
-  letter-spacing: 0.02em;
-  color: #dfe4ec;
-  white-space: nowrap;
-  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
-  &[data-active="true"] {
-    background: #ffffff;
-    color: #06060a;
-    border-color: #ffffff;
-    font-weight: 600;
-  }
+  background: rgba(255, 255, 255, 0.04);
+  padding: 0.2rem 0.55rem;
+  font-size: 11px;
+  color: var(--muted);
 }
 
-@utility skeleton {
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.04));
-  background-size: 200% 100%;
-  animation: shimmer 1.4s linear infinite;
+@utility neon-text {
+  color: #fff;
+  text-shadow: 0 0 18px rgba(255, 211, 106, 0.25);
 }
 
-@keyframes shimmer {
-  0% {
-    background-position: 200% 0;
-  }
-  100% {
-    background-position: -200% 0;
-  }
-}
-
-@keyframes float-in {
-  from {
-    opacity: 0;
-    transform: translateY(14px) scale(0.98);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-@keyframes pulse-dot {
-  0%,
-  100% {
-    opacity: 1;
-    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.5);
-  }
-  50% {
-    opacity: 0.6;
-    box-shadow: 0 0 0 6px rgba(255, 255, 255, 0);
-  }
-}
-
-@utility animate-float-in {
-  animation: float-in 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) both;
-}
-
-@utility live-dot {
-  width: 0.5rem;
-  height: 0.5rem;
+/* ---- buttons ---- */
+@utility btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
   border-radius: 999px;
-  background: #ffffff;
-  animation: pulse-dot 1.8s ease-in-out infinite;
+  border: 1px solid var(--line-2);
+  background: linear-gradient(180deg, #2a2a34, #17171e);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 0.55rem 1rem;
+  box-shadow: 0 4px 0 #0a0a0e, 0 8px 16px rgba(0, 0, 0, 0.35);
+  transition: transform 0.12s ease, filter 0.12s ease;
+  transform: translateZ(0);
+  will-change: transform;
+}
+@utility btn {
+  &:active {
+    transform: translateY(2px);
+    box-shadow: 0 1px 0 #0a0a0e, 0 2px 6px rgba(0, 0, 0, 0.3);
+  }
+  &:disabled {
+    opacity: 0.45;
+    pointer-events: none;
+  }
 }
 
-/* digital particle layer (very light: pure CSS, no JS loop) */
-@utility particle-field {
+@utility btn-primary {
+  border-color: rgba(255, 211, 106, 0.45);
+  background: linear-gradient(180deg, #ffe08a, #ffb84a 45%, #ff8a2b);
+  color: #1a1208;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
+  box-shadow: 0 4px 0 #9a4e12, 0 10px 20px rgba(255, 140, 40, 0.28);
+}
+
+/* 3D action buttons for XML / 5MB */
+.btn-xml {
+  display: inline-flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  border-radius: 14px;
+  border: 1px solid rgba(93, 255, 177, 0.45);
+  background: linear-gradient(180deg, #7dffc4, #2fdc8a 50%, #12b86a);
+  color: #062417;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  padding: 0.65rem 0.75rem;
+  box-shadow:
+    0 4px 0 #0b6b3f,
+    0 10px 18px rgba(18, 184, 106, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  transition: transform 0.12s ease;
+}
+.btn-xml:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 #0b6b3f, 0 3px 8px rgba(18, 184, 106, 0.2);
+}
+
+.btn-5mb {
+  display: inline-flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  border-radius: 14px;
+  border: 1px solid rgba(120, 180, 255, 0.5);
+  background: linear-gradient(180deg, #9ec5ff, #4f8cff 50%, #2b63e8);
+  color: #07122a;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  padding: 0.65rem 0.75rem;
+  box-shadow:
+    0 4px 0 #1a3f9a,
+    0 10px 18px rgba(47, 99, 232, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  transition: transform 0.12s ease;
+}
+.btn-5mb:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 #1a3f9a, 0 3px 8px rgba(47, 99, 232, 0.22);
+}
+
+/* Skeleton */
+@utility skeleton {
+  background: linear-gradient(90deg, #14141a, #1e1e28, #14141a);
+  background-size: 200% 100%;
+  animation: shimmer 1.2s linear infinite;
+}
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Live dot */
+.live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--ok);
+  box-shadow: 0 0 8px var(--ok);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.55; transform: scale(0.85); }
+}
+
+/* Disable expensive layers by default for 120fps feel */
+.particle-field {
+  display: none !important;
+}
+
+/* Welcome splash — Garena Free Fire style */
+.welcome-splash {
   position: fixed;
   inset: 0;
+  z-index: 9999;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(ellipse at center, #1a1208 0%, #07070a 70%),
+    #07070a;
+  animation: splash-out 0.55s ease-in 2.1s forwards;
   pointer-events: none;
-  z-index: 0;
-  opacity: 0.5;
-  background-image:
-    radial-gradient(1.5px 1.5px at 20% 30%, rgba(255, 255, 255, 0.5), transparent),
-    radial-gradient(1.2px 1.2px at 70% 20%, rgba(255, 255, 255, 0.35), transparent),
-    radial-gradient(1.6px 1.6px at 40% 70%, rgba(255, 255, 255, 0.28), transparent),
-    radial-gradient(1.2px 1.2px at 85% 65%, rgba(255, 255, 255, 0.4), transparent),
-    radial-gradient(1.4px 1.4px at 12% 85%, rgba(255, 255, 255, 0.3), transparent);
-  animation: drift 26s linear infinite alternate;
+}
+.welcome-splash__badge {
+  text-align: center;
+  animation: splash-in 0.55s cubic-bezier(0.2, 0.9, 0.2, 1) both;
+}
+.welcome-splash__mark {
+  display: inline-grid;
+  place-items: center;
+  width: 88px;
+  height: 88px;
+  margin: 0 auto 1rem;
+  border-radius: 22px;
+  background: linear-gradient(145deg, #ffe08a, #ff8a2b);
+  color: #1a1208;
+  font-size: 34px;
+  font-weight: 900;
+  box-shadow:
+    0 0 0 3px rgba(255, 211, 106, 0.35),
+    0 12px 40px rgba(255, 140, 40, 0.45);
+}
+.welcome-splash__title {
+  font-size: clamp(1.6rem, 5vw, 2.4rem);
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #fff;
+  text-shadow: 0 0 24px rgba(255, 211, 106, 0.45);
+}
+.welcome-splash__sub {
+  margin-top: 0.4rem;
+  font-size: 12px;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.welcome-splash__bar {
+  width: 140px;
+  height: 3px;
+  margin: 1.1rem auto 0;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  animation: bar-sweep 1.4s ease-in-out infinite;
+}
+@keyframes splash-in {
+  from { opacity: 0; transform: scale(0.86) translateY(12px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes splash-out {
+  to { opacity: 0; visibility: hidden; }
+}
+@keyframes bar-sweep {
+  0%, 100% { opacity: 0.35; transform: scaleX(0.7); }
+  50% { opacity: 1; transform: scaleX(1); }
 }
 
-@keyframes drift {
-  from {
-    transform: translate3d(0, 0, 0);
-  }
-  to {
-    transform: translate3d(-12px, -18px, 0);
-  }
-}
-
+/* Reduce motion / low power */
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.001ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.001ms !important;
+  .welcome-splash,
+  .welcome-splash__badge,
+  .welcome-splash__bar,
+  .live-dot,
+  .skeleton {
+    animation: none !important;
   }
-}
-
-.safe-bottom {
-  padding-bottom: env(safe-area-inset-bottom, 0px);
-}
-
-/* ==========================================================================
-   120FPS RENDER LAYER
-   Everything animates on compositor-only properties (transform/opacity) so
-   frames stay cheap. No layout or paint work is triggered on the main thread.
-   ========================================================================== */
-
-/* Promote animated surfaces to their own compositor layer. */
-@utility gpu {
-  transform: translateZ(0);
-  will-change: transform, opacity;
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
-}
-
-/* Cards: single composite transform, no box-shadow animation (that repaints). */
-.card-3d,
-.chip,
-.btn {
-  transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
-  will-change: auto;
-}
-.card-3d {
-  contain: layout style paint;
-  content-visibility: auto;
-  contain-intrinsic-size: auto 320px;
-}
-.card-3d.card-3d-hover:hover {
-  transform: translate3d(0, -4px, 0);
-  will-change: transform;
-}
-
-/* Video/feed: never blur large moving surfaces — blur is the #1 fps killer. */
-video {
-  transform: translateZ(0);
-  contain: strict;
-  background: #000;
-}
-.snap-y.snap-mandatory {
-  scroll-behavior: smooth;
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior-y: contain;
-}
-
-/* One shared particle layer, GPU-driven, paused when not visible. */
-.particle-field {
-  will-change: transform;
-  transform: translate3d(0, 0, 0);
-  animation: drift 40s linear infinite alternate;
-}
-
-/* Respect low-power devices: drop decoration instead of dropping frames. */
-@media (max-width: 640px) {
-  .particle-field {
+  .welcome-splash {
     display: none;
   }
-  .card-3d {
-    content-visibility: auto;
-    contain-intrinsic-size: auto 260px;
-  }
 }
 
-/* Images decode off the main thread. */
-img {
-  content-visibility: auto;
-  decode: async;
-}
-
-
-/* ==========================================================================
-   120FPS / HIGH-REFRESH PIPELINE
-   Goal: every frame costs only a compositor transform. No layout, no paint,
-   no blur on moving surfaces. Durations are tuned to land on 120Hz frame
-   boundaries (8.33ms) so motion never judders on high-refresh displays.
-   ========================================================================== */
-
-:root {
-  --f1: 0.0833s;  /* 10 frames @120Hz */
-  --f2: 0.15s;    /* 18 frames       */
-  --f3: 0.25s;    /* 30 frames       */
-  --ease-120: cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-/* Opt every interactive surface into compositor-only transitions. */
-.btn,
-.chip,
-.card-3d,
-a,
-button {
-  transition-property: transform, opacity, background-color, border-color, color;
-  transition-duration: var(--f2);
-  transition-timing-function: var(--ease-120);
-}
-
-/* Hover lift uses translate3d only (no box-shadow animation = no repaint). */
-.card-3d.card-3d-hover:hover {
-  transform: translate3d(0, -4px, 0);
-}
-.btn:active,
-.chip:active {
-  transform: scale3d(0.97, 0.97, 1);
-}
-
-/* Scrolling containers get their own layer + momentum on touch. */
-.snap-y,
-.overflow-y-auto,
-main {
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior: contain;
-  transform: translateZ(0);
-}
-
-/* Offscreen cards are skipped entirely by the renderer. */
-.card-3d {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 320px;
-  contain: layout style paint;
-}
-
-/* Video is the heaviest surface: isolate it and never filter/blur it. */
-video {
-  transform: translateZ(0);
-  will-change: transform;
-  contain: strict;
-  filter: none !important;
-  image-rendering: auto;
-}
-
-/* Backdrop blur is expensive — keep it ONLY on small, static chrome. */
-.glass,
-.glass-strong {
-  backdrop-filter: blur(14px) saturate(140%);
-  -webkit-backdrop-filter: blur(14px) saturate(140%);
-  will-change: auto;
-}
-@media (max-width: 900px) {
-  /* Mobile GPUs choke on full-width blur: swap for a solid tint. */
-  .glass,
-  .glass-strong {
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-    background: rgba(10, 10, 14, 0.92);
-  }
-}
-
-/* Particles: one composited layer, long cheap loop, hidden on small screens. */
-.particle-field {
-  will-change: transform;
-  animation-duration: 60s;
-}
-
-/* Skeleton shimmer runs on transform, not background-position (repaint-free). */
-@keyframes shimmer-x {
-  from { transform: translate3d(-100%, 0, 0); }
-  to   { transform: translate3d(100%, 0, 0); }
-}
-.skeleton {
-  position: relative;
-  overflow: hidden;
-  background: rgba(255, 255, 255, 0.05);
-  animation: none;
-}
-.skeleton::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.12), transparent);
-  animation: shimmer-x 1.1s linear infinite;
-  will-change: transform;
-}
-
-/* Images never block the main thread. */
-img {
-  content-visibility: auto;
-}
-
-/* Honour reduced-motion without losing layout. */
-@media (prefers-reduced-motion: reduce) {
-  .particle-field { display: none; }
-  .skeleton::after { animation: none; }
-}
-
-/* Degraded mode chosen at runtime by PerfTuner when fps drops. */
-:root[data-perf="lite"] .particle-field { display: none; }
-:root[data-perf="lite"] .glass,
-:root[data-perf="lite"] .glass-strong {
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-  background: rgba(10, 10, 14, 0.94);
-}
-:root[data-perf="lite"] .card-3d { box-shadow: none; }
-:root[data-hidden="1"] .particle-field,
-:root[data-hidden="1"] .skeleton::after { animation-play-state: paused; }
-
-/* Scan sweep: pure transform, runs on the compositor at any refresh rate. */
-@keyframes scan-sweep {
-  0%   { transform: translate3d(-120%, 0, 0); }
-  100% { transform: translate3d(400%, 0, 0); }
-}
-.scan-sweep {
-  animation: scan-sweep 1.1s linear infinite;
-  will-change: transform;
-  border-radius: 999px;
-  box-shadow: 0 0 12px rgba(255, 255, 255, 0.8);
-}
-
-/* ==========================================================================
-   120FPS — frame-budget aware rules driven by PerfTuner
-   ========================================================================== */
-
-/* Scroll is the hottest path: drop every expensive effect while it happens. */
-:root[data-scrolling="1"] .glass,
-:root[data-scrolling="1"] .glass-strong {
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-  background: rgba(10, 10, 14, 0.92);
-}
-:root[data-scrolling="1"] .card-3d {
-  box-shadow: none;
-  transition: none;
-}
-:root[data-scrolling="1"] .particle-field {
-  opacity: 0.25;
-}
-
-/* High-refresh screens get shorter, snappier transitions. */
-:root[data-hz="120"],
-:root[data-hz="144"],
-:root[data-hz="240"] {
-  --f1: 0.066s;
-  --f2: 0.116s;
-  --f3: 0.2s;
-}
-
-/* Scope transitions to interactive elements only — a universal selector
-   forces a style recalculation on every node and is the main cost at 120Hz. */
-.btn,
-.chip,
-.card-3d,
-a,
-button,
-input,
-select,
-textarea {
-  transition-property: transform, opacity, background-color, border-color, color;
-}
-
-/* Feed items are virtualised by the renderer, not by JS. */
-[data-preset-id] {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 560px;
-  contain: layout paint style;
-}
-
-/* Keep the compositor layer count bounded: only the active video is promoted. */
-video {
-  will-change: auto;
-}
-[data-preset-id] video {
-  will-change: transform;
-}
-
-/* Green "balasan developer nih" indicator. */
-@keyframes inbox-pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50%      { opacity: 0.55; transform: scale(0.82); }
-}
-.inbox-dot {
-  display: inline-block;
-  width: 0.55rem;
-  height: 0.55rem;
-  border-radius: 999px;
-  background: #34d399;
-  box-shadow: 0 0 10px rgba(52, 211, 153, 0.9);
-  animation: inbox-pulse 1.4s ease-in-out infinite;
-  will-change: transform, opacity;
-}
-
-
-/* ==========================================================================
-   LIGHTWEIGHT FRAME PIPELINE — 120fps on high-refresh, locked-smooth on 60Hz
-   Principle: one composited layer per moving element, zero blur while moving,
-   zero shadow animation, and no work at all for offscreen content.
-   ========================================================================== */
-
-/* Cheap defaults everywhere. */
-html {
-  text-rendering: optimizeSpeed;
-}
-body {
-  /* A fixed background attachment repaints on every scroll frame on mobile. */
-  background-attachment: scroll;
-}
-
-/* 60Hz devices: slightly longer durations so motion still reads as smooth. */
-:root[data-hz="60"] {
-  --f1: 0.1s;
-  --f2: 0.167s;
-  --f3: 0.25s;
-}
-
-/* Only promote what is actually moving right now. */
-.card-3d,
-.chip,
-.btn {
-  will-change: auto;
-}
-.card-3d.card-3d-hover:hover,
-.btn:active,
-.chip:active {
-  will-change: transform;
-}
-
-/* Shadows are expensive to animate: keep them static. */
-.card-3d {
-  transition-property: transform, border-color;
-}
-
-/* Feed: only the in-view item does any rendering work. */
-[data-preset-id] {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 560px;
-}
-
-/* Lite mode (auto-enabled by PerfTuner when frames are dropped). */
-:root[data-perf="lite"] * {
-  animation-duration: 0.001ms !important;
-  transition-duration: 0.001ms !important;
-}
-:root[data-perf="lite"] .scan-sweep,
-:root[data-perf="lite"] .inbox-dot,
-:root[data-perf="lite"] .live-dot {
-  animation: none !important;
+/* Layout helpers */
+.safe-bottom {
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
 }
