@@ -5,11 +5,13 @@
     "dev": "next dev",
     "prebuild": "node -e \"const fs=require('fs'); for (const p of ['src/app/layout.tsx','src/app/shell.tsx','src/app/perf.tsx']) { if (!fs.existsSync(p)) { console.error('MISSING '+p); process.exit(1);} } console.log('prebuild ok');\"",
     "build": "next build --webpack",
-    "start": "next start",
+    "start": "node scripts/db-push.mjs && next start",
     "start:next": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "start:standalone": "node .next/standalone/server.js"
+    "start:standalone": "node scripts/db-push.mjs && node server.js",
+    "db:push": "node scripts/db-push.mjs",
+    "db:drizzle": "drizzle-kit push"
   },
   "dependencies": {
     "@whiskeysockets/baileys": "^7.0.0-rc14",

@@ -36,11 +36,18 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
     .where(eq(presets.id, id))
     .limit(1);
   const localUrl = rowsLocal[0]?.videoUrl ?? "";
-  if (localUrl.startsWith("/uploads/")) {
+  if (localUrl.startsWith("/uploads/") || localUrl.startsWith("/api/media/local")) {
     const fs = await import("node:fs");
     const path = await import("node:path");
-    const filePath = path.join(process.cwd(), "public", localUrl.replace(/^\//, ""));
-    if (fs.existsSync(filePath)) {
+    let filePath = "";
+    if (localUrl.startsWith("/uploads/")) {
+      filePath = path.join(process.cwd(), "public", localUrl.replace(/^\//, ""));
+    } else {
+      const u = new URL(localUrl, "http://local");
+      const f = u.searchParams.get("f") || "";
+      filePath = path.join(process.cwd(), "public", "uploads", path.basename(f));
+    }
+    if (filePath && fs.existsSync(filePath)) {
       const stat = fs.statSync(filePath);
       const data = fs.readFileSync(filePath);
       return new Response(data, {
@@ -53,6 +60,10 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
         },
       });
     }
+  }
+  // External direct video URL (e.g. catbox)
+  if (/^https?:\/\//i.test(localUrl) && /\.(mp4|webm|mov)(\?|$)/i.test(localUrl)) {
+    return streamMedia(localUrl, range);
   }
 
   // 2. live resolve

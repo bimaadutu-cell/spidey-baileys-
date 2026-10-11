@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "./hooks";
 import { Avatar, avatarLabel } from "./avatar";
 
@@ -143,6 +143,7 @@ export function AccountPanel() {
   const [uploading, setUploading] = useState(false);
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [videoPreview, setVideoPreview] = useState<string | null>(null);
+  const videoPreviewRef = useRef<HTMLVideoElement | null>(null);
 
   // --- ALL hooks run unconditionally (Rules of Hooks) -------------------
   const username = user?.username ?? "";
@@ -264,21 +265,67 @@ export function AccountPanel() {
               <span className="text-[11px] text-slate-400">Ketuk untuk membuka galeri · MP4 / MOV · max 80MB</span>
               <input
                 type="file"
-                accept="video/*"
+                accept="video/*,video/mp4,video/quicktime,video/webm"
                 className="hidden"
                 onChange={(e) => {
-                  const file = e.target.files?.[0] ?? null;
-                  if (videoPreview) URL.revokeObjectURL(videoPreview);
-                  setVideoFile(file);
-                  setVideoPreview(file ? URL.createObjectURL(file) : null);
+                  const input = e.target;
+                  const file = input.files?.[0] ?? null;
                   setUploadMsg(null);
+                  setVideoPreview((prev) => {
+                    if (prev) {
+                      try { URL.revokeObjectURL(prev); } catch { /* ignore */ }
+                    }
+                    if (!file) {
+                      setVideoFile(null);
+                      return null;
+                    }
+                    setVideoFile(file);
+                    // blob: URL works for local preview without uploading
+                    return URL.createObjectURL(file);
+                  });
+                  // allow selecting the same file again later
+                  input.value = "";
                 }}
               />
             </label>
             {videoPreview ? (
               <div className="overflow-hidden rounded-2xl border border-white/10 bg-black">
-                <video src={videoPreview} controls playsInline className="mx-auto max-h-64 w-full object-contain" />
-                <p className="px-3 py-2 text-[11px] text-slate-400">Preview — pastikan video sudah benar sebelum upload</p>
+                <video
+                  key={videoPreview}
+                  ref={videoPreviewRef}
+                  src={videoPreview}
+                  controls
+                  playsInline
+                  muted
+                  preload="metadata"
+                  className="mx-auto max-h-72 w-full bg-black object-contain"
+                  style={{ minHeight: 180 }}
+                  onLoadedData={(ev) => {
+                    try {
+                      ev.currentTarget.currentTime = 0.1;
+                    } catch { /* ignore */ }
+                  }}
+                />
+                <div className="flex items-center justify-between gap-2 px-3 py-2">
+                  <p className="text-[11px] text-slate-400">
+                    Preview siap · {(videoFile ? (videoFile.size / (1024 * 1024)).toFixed(1) : "?")} MB
+                  </p>
+                  <button
+                    type="button"
+                    className="text-[11px] text-red-300 underline"
+                    onClick={() => {
+                      setVideoPreview((prev) => {
+                        if (prev) {
+                          try { URL.revokeObjectURL(prev); } catch { /* ignore */ }
+                        }
+                        return null;
+                      });
+                      setVideoFile(null);
+                    }}
+                  >
+                    Hapus video
+                  </button>
+                </div>
               </div>
             ) : null}
             <input
@@ -308,8 +355,19 @@ export function AccountPanel() {
                     if (uploadXml.trim()) body.append("xmlUrl", uploadXml.trim());
                     if (uploadFive.trim()) body.append("fiveMbUrl", uploadFive.trim());
                     const res = await fetch("/api/upload", { method: "POST", body });
-                    const data = (await res.json()) as { ok?: boolean; message?: string; error?: string };
-                    setUploadMsg(data.message ?? data.error ?? (data.ok ? "Berhasil di-upload" : "Gagal"));
+                    const raw = await res.text();
+                    let data: { ok?: boolean; message?: string; error?: string } = {};
+                    try {
+                      data = JSON.parse(raw) as typeof data;
+                    } catch {
+                      setUploadMsg(
+                        res.status === 413
+                          ? "File terlalu besar untuk server"
+                          : `Server error HTTP ${res.status}. Coba video lebih kecil atau deploy ulang.`,
+                      );
+                      return;
+                    }
+                    setUploadMsg(data.message ?? data.error ?? (data.ok ? "Berhasil di-upload" : "Gagal upload"));
                     if (data.ok) {
                       setUploadTitle("");
                       setUploadXml("");
@@ -317,12 +375,15 @@ export function AccountPanel() {
                       setVideoFile(null);
                       if (videoPreview) URL.revokeObjectURL(videoPreview);
                       setVideoPreview(null);
-                      const s = await fetch("/api/social");
-                      const sj = (await s.json()) as { stats?: typeof stats };
-                      if (sj.stats) setStats(sj.stats);
+                      try {
+                        const s = await fetch("/api/social");
+                        const sj = (await s.json()) as { stats?: typeof stats };
+                        if (sj.stats) setStats(sj.stats);
+                      } catch { /* ignore */ }
                     }
-                  } catch {
-                    setUploadMsg("Koneksi gagal");
+                  } catch (err) {
+                    const m = err instanceof Error ? err.message : "unknown";
+                    setUploadMsg(/failed to fetch|network/i.test(m) ? "Koneksi gagal — cek jaringan / ukuran file" : `Gagal: ${m}`);
                   } finally {
                     setUploading(false);
                   }

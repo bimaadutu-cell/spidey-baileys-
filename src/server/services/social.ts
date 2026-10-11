@@ -28,28 +28,32 @@ export async function unfollowUser(followerId: string, followingId: string) {
 }
 
 export async function getProfileStats(userId: string) {
-  const [followers] = await db
-    .select({ n: sql<number>`count(*)::int` })
-    .from(userFollows)
-    .where(eq(userFollows.followingId, userId));
-  const [following] = await db
-    .select({ n: sql<number>`count(*)::int` })
-    .from(userFollows)
-    .where(eq(userFollows.followerId, userId));
-  const [favs] = await db
-    .select({ n: sql<number>`count(*)::int` })
-    .from(presetFavorites)
-    .where(eq(presetFavorites.userId, userId));
-  const [uploads] = await db
-    .select({ n: sql<number>`count(*)::int` })
-    .from(userUploads)
-    .where(and(eq(userUploads.userId, userId), eq(userUploads.status, "published")));
-  return {
-    followers: followers?.n ?? 0,
-    following: following?.n ?? 0,
-    favorites: favs?.n ?? 0,
-    uploads: uploads?.n ?? 0,
-  };
+  try {
+    const [followers] = await db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(userFollows)
+      .where(eq(userFollows.followingId, userId));
+    const [following] = await db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(userFollows)
+      .where(eq(userFollows.followerId, userId));
+    const [favs] = await db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(presetFavorites)
+      .where(eq(presetFavorites.userId, userId));
+    const [uploads] = await db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(userUploads)
+      .where(and(eq(userUploads.userId, userId), eq(userUploads.status, "published")));
+    return {
+      followers: followers?.n ?? 0,
+      following: following?.n ?? 0,
+      favorites: favs?.n ?? 0,
+      uploads: uploads?.n ?? 0,
+    };
+  } catch {
+    return { followers: 0, following: 0, favorites: 0, uploads: 0 };
+  }
 }
 
 export async function toggleFavorite(userId: string, presetId: string) {

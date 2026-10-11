@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { NextRequest } from "next/server";
 import { getCurrentUser } from "@/server/auth";
-import { clientIp, fail, json, rateLimit, tooMany } from "@/server/http";
+import { clientIp, fail, json, rateLimit, readJson, tooMany } from "@/server/http";
 import { listUserUploads, uploadUserPreset } from "@/server/services/social";
 
 export const dynamic = "force-dynamic";
@@ -11,79 +11,139 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 function uploadRoot(): string {
-  const preferred = process.env.UPLOAD_DIR?.trim() || path.join(process.cwd(), "public", "uploads");
-  if (!fs.existsSync(preferred)) fs.mkdirSync(preferred, { recursive: true });
+  const preferred =
+    process.env.UPLOAD_DIR?.trim() ||
+    (fs.existsSync("/data") ? "/data/uploads" : path.join(process.cwd(), "public", "uploads"));
+  try {
+    if (!fs.existsSync(preferred)) fs.mkdirSync(preferred, { recursive: true });
+  } catch {
+    const fallback = path.join("/tmp", "preset-uploads");
+    if (!fs.existsSync(fallback)) fs.mkdirSync(fallback, { recursive: true });
+    return fallback;
+  }
   return preferred;
 }
 
 export async function GET() {
   const user = await getCurrentUser();
   if (!user) return fail("Login diperlukan", 401);
-  const items = await listUserUploads(user.id);
-  return json({ ok: true, items });
+  try {
+    const items = await listUserUploads(user.id);
+    return json({ ok: true, items });
+  } catch (error) {
+    return json({
+      ok: true,
+      items: [],
+      note: error instanceof Error ? error.message : "tabel upload belum siap",
+    });
+  }
 }
 
 export async function POST(req: NextRequest) {
   const user = await getCurrentUser();
   if (!user) return fail("Login diperlukan", 401);
-  if (!rateLimit(`upload:${user.id}:${clientIp(req)}`, 6, 600_000)) return tooMany();
+  if (!rateLimit(`upload:${user.id}:${clientIp(req)}`, 8, 600_000)) return tooMany();
 
   const contentType = req.headers.get("content-type") || "";
-  if (!contentType.includes("multipart/form-data")) {
-    return fail("Upload harus multipart (pilih video dari galeri)", 400);
-  }
 
-  let form: FormData;
   try {
-    form = await req.formData();
-  } catch {
-    return fail("Gagal membaca file upload", 400);
-  }
+    // --- Mode A: gallery file (multipart) ---
+    if (contentType.includes("multipart/form-data")) {
+      let form: FormData;
+      try {
+        form = await req.formData();
+      } catch {
+        return fail("Gagal membaca file dari galeri", 400);
+      }
 
-  const title = String(form.get("title") || "").trim();
-  const caption = String(form.get("caption") || "").trim();
-  const xmlUrl = String(form.get("xmlUrl") || "").trim();
-  const fiveMbUrl = String(form.get("fiveMbUrl") || "").trim();
-  const file = form.get("video");
+      const title = String(form.get("title") || "").trim();
+      const caption = String(form.get("caption") || "").trim();
+      const xmlUrl = String(form.get("xmlUrl") || "").trim();
+      const fiveMbUrl = String(form.get("fiveMbUrl") || "").trim();
+      const file = form.get("video");
 
-  if (!title) return fail("Judul wajib diisi", 422);
-  if (!file || typeof file === "string") return fail("Pilih video dari galeri dulu", 422);
+      if (!title) return fail("Judul wajib diisi", 422);
+      if (!file || typeof file === "string") return fail("Pilih video dari galeri dulu", 422);
 
-  const blob = file as File;
-  const mime = blob.type || "video/mp4";
-  if (!mime.startsWith("video/")) return fail("File harus video", 422);
-  if (blob.size > 80 * 1024 * 1024) return fail("Maksimal 80 MB", 422);
+      const blob = file as File;
+      const mime = blob.type || "video/mp4";
+      if (blob.size > 80 * 1024 * 1024) return fail("Maksimal 80 MB", 422);
 
-  const ext =
-    mime.includes("webm") ? "webm" : mime.includes("quicktime") || mime.includes("mov") ? "mov" : "mp4";
-  const filename = `${user.id.slice(0, 8)}_${Date.now()}_${randomUUID().slice(0, 8)}.${ext}`;
-  const dir = uploadRoot();
-  const fullPath = path.join(dir, filename);
-  const buffer = Buffer.from(await blob.arrayBuffer());
-  fs.writeFileSync(fullPath, buffer);
+      const ext = mime.includes("webm")
+        ? "webm"
+        : mime.includes("quicktime") || mime.includes("mov")
+          ? "mov"
+          : "mp4";
+      const filename = `${user.id.slice(0, 8)}_${Date.now()}_${randomUUID().slice(0, 8)}.${ext}`;
+      const dir = uploadRoot();
+      const fullPath = path.join(dir, filename);
+      const buffer = Buffer.from(await blob.arrayBuffer());
+      fs.writeFileSync(fullPath, buffer);
 
-  // Public URL — files under public/uploads are served as /uploads/...
-  // If UPLOAD_DIR is outside public, media route can still serve them later.
-  const videoUrl = `/uploads/${filename}`;
+      // Prefer public path; otherwise serve via /api/media/local?f=
+      const underPublic = dir.includes(`${path.sep}public${path.sep}`) || dir.endsWith(`${path.sep}public`);
+      const videoUrl = underPublic
+        ? `/uploads/${filename}`
+        : `/api/media/local?f=${encodeURIComponent(filename)}`;
 
-  const result = await uploadUserPreset({
-    userId: user.id,
-    username: user.username,
-    title,
-    caption: caption || undefined,
-    videoUrl,
-    xmlUrl: xmlUrl || undefined,
-    fiveMbUrl: fiveMbUrl || undefined,
-  });
+      // copy into public/uploads when possible so static serve works
+      try {
+        const pub = path.join(process.cwd(), "public", "uploads");
+        if (!fs.existsSync(pub)) fs.mkdirSync(pub, { recursive: true });
+        if (path.resolve(dir) !== path.resolve(pub)) {
+          fs.copyFileSync(fullPath, path.join(pub, filename));
+        }
+      } catch {
+        /* ignore */
+      }
 
-  if (!result.ok) {
-    try {
-      fs.unlinkSync(fullPath);
-    } catch {
-      /* ignore */
+      const result = await uploadUserPreset({
+        userId: user.id,
+        username: user.username,
+        title,
+        caption: caption || undefined,
+        videoUrl: underPublic ? `/uploads/${filename}` : videoUrl,
+        xmlUrl: xmlUrl || undefined,
+        fiveMbUrl: fiveMbUrl || undefined,
+      });
+
+      if (!result.ok) return json(result, { status: 422 });
+      return json({ ...result, videoUrl: result.ok ? `/uploads/${filename}` : videoUrl }, { status: 201 });
     }
-    return json(result, { status: 422 });
-  }
 
-  return json({ ...result, videoUrl }, { status: 201 });
+    // --- Mode B: JSON with external video URL (fallback) ---
+    const body = (await readJson<Record<string, unknown>>(req)) ?? {};
+    const title = String(body.title || "").trim();
+    const videoUrl = String(body.videoUrl || "").trim();
+    const xmlUrl = String(body.xmlUrl || "").trim();
+    const fiveMbUrl = String(body.fiveMbUrl || "").trim();
+    const caption = String(body.caption || "").trim();
+
+    if (!title) return fail("Judul wajib diisi", 422);
+    if (!videoUrl || !/^https?:\/\//i.test(videoUrl)) {
+      return fail("Pilih video dari galeri, atau isi URL video https://", 422);
+    }
+
+    const result = await uploadUserPreset({
+      userId: user.id,
+      username: user.username,
+      title,
+      caption: caption || undefined,
+      videoUrl,
+      xmlUrl: xmlUrl || undefined,
+      fiveMbUrl: fiveMbUrl || undefined,
+    });
+
+    return json(result, { status: result.ok ? 201 : 422 });
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : "unknown";
+    // Common: relation "user_uploads" does not exist → need drizzle-kit push
+    if (/user_uploads|relation|does not exist|column/i.test(msg)) {
+      return fail(
+        "Database belum punya tabel upload. Jalankan di server: npx drizzle-kit push",
+        503,
+      );
+    }
+    return fail(`Upload gagal: ${msg.slice(0, 180)}`, 500);
+  }
 }
