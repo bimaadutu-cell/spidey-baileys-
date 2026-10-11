@@ -9,7 +9,7 @@ export const APP = {
   nameCn: "预设空间",
   name: "Preset Space",
   tagline: "Find it. Preset it. Create it.",
-  developer: "BimzOfficial Developer ✓",
+  developer: "BimzOfficial ✓",
 } as const;
 
 function env(key: string, fallback = ""): string {
@@ -67,7 +67,7 @@ export const config = {
     developerNumber: env("WHATSAPP_DEVELOPER_NUMBER", "6283115955196"),
     globalChatEnabled: env("GLOBAL_CHAT_ENABLED", "true").toLowerCase() !== "false",
     globalChatSourceJid: env("GLOBAL_CHAT_SOURCE_JID"),
-    globalChatDisplayName: env("GLOBAL_CHAT_DISPLAY_NAME", "BimzOfficial Developer ✓"),
+    globalChatDisplayName: env("GLOBAL_CHAT_DISPLAY_NAME", "BimzOfficial ✓"),
   },
 
   scan: {

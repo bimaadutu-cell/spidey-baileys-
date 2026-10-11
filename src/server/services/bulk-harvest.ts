@@ -37,10 +37,11 @@ export async function runBulkHarvest(options: {
   includeCreators?: boolean;
 } = {}): Promise<HarvestReport> {
   const perQuery = options.perQuery ?? 60;
+  // Creators first so FYP fills with real AM preset accounts (e.g. @arullzzxyz)
   const queries: string[] = [
+    ...(options.includeCreators === false ? [] : PRESET_CREATORS),
     ...PRESET_KEYWORDS,
     ...PRESET_HASHTAGS,
-    ...(options.includeCreators === false ? [] : PRESET_CREATORS),
   ];
   const capped = queries.slice(0, options.maxQueries ?? queries.length);
 

@@ -226,7 +226,7 @@ export function GlobalChat({ onChanged }: { onChanged?: () => void }) {
                     <p className="mb-0.5 flex items-center gap-1.5 text-[11px] font-semibold opacity-80">
                       {message.isDeveloper ? (
                         <span className="flex items-center gap-1">
-                          BimzOfficial
+                          {message.authorName.replace(/\s*✓\s*$/, "") || "BimzOfficial"}
                           <span className="grid h-3.5 w-3.5 place-items-center rounded-full bg-sky-400 text-[8px] font-black text-black">
                             ✓
                           </span>

@@ -75,23 +75,30 @@ export async function POST(req: NextRequest) {
           ? "mov"
           : "mp4";
       const filename = `${user.id.slice(0, 8)}_${Date.now()}_${randomUUID().slice(0, 8)}.${ext}`;
-      const dir = uploadRoot();
-      const fullPath = path.join(dir, filename);
-      const buffer = Buffer.from(await blob.arrayBuffer());
-      fs.writeFileSync(fullPath, buffer);
-
-      // Prefer public path; otherwise serve via /api/media/local?f=
-      const underPublic = dir.includes(`${path.sep}public${path.sep}`) || dir.endsWith(`${path.sep}public`);
-      const videoUrl = underPublic
-        ? `/uploads/${filename}`
-        : `/api/media/local?f=${encodeURIComponent(filename)}`;
-
-      // copy into public/uploads when possible so static serve works
+      // Always write to public/uploads so URL is always /uploads/<file>
+      const pub = path.join(process.cwd(), "public", "uploads");
       try {
-        const pub = path.join(process.cwd(), "public", "uploads");
         if (!fs.existsSync(pub)) fs.mkdirSync(pub, { recursive: true });
-        if (path.resolve(dir) !== path.resolve(pub)) {
-          fs.copyFileSync(fullPath, path.join(pub, filename));
+      } catch {
+        /* fallback below */
+      }
+      let fullPath = path.join(pub, filename);
+      const buffer = Buffer.from(await blob.arrayBuffer());
+      try {
+        fs.writeFileSync(fullPath, buffer);
+      } catch {
+        const dir = uploadRoot();
+        fullPath = path.join(dir, filename);
+        fs.writeFileSync(fullPath, buffer);
+      }
+      // Canonical public URL (also works via /api/media/local fallback)
+      const videoUrl = `/uploads/${filename}`;
+      // Mirror to /data/uploads if available (Railway volume)
+      try {
+        if (fs.existsSync("/data")) {
+          const dataDir = "/data/uploads";
+          if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+          fs.copyFileSync(fullPath, path.join(dataDir, filename));
         }
       } catch {
         /* ignore */
@@ -102,13 +109,13 @@ export async function POST(req: NextRequest) {
         username: user.username,
         title,
         caption: caption || undefined,
-        videoUrl: underPublic ? `/uploads/${filename}` : videoUrl,
+        videoUrl,
         xmlUrl: xmlUrl || undefined,
         fiveMbUrl: fiveMbUrl || undefined,
       });
 
       if (!result.ok) return json(result, { status: 422 });
-      return json({ ...result, videoUrl: result.ok ? `/uploads/${filename}` : videoUrl }, { status: 201 });
+      return json({ ...result, videoUrl }, { status: 201 });
     }
 
     // --- Mode B: JSON with external video URL (fallback) ---

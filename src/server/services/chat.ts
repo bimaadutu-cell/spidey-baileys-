@@ -108,7 +108,7 @@ function developerIdentityFor(
       (candidate.length >= 9 && target.endsWith(candidate)) ||
       (target.length >= 9 && candidate.endsWith(target)));
   return {
-    name: allowed ? cfg.displayName || "BimzOfficial Developer ✓" : sanitizeText(jid ?? "unknown", 60),
+    name: allowed ? (cfg.displayName || "BimzOfficial ✓") : sanitizeText(jid ?? "unknown", 60),
     isDeveloper: allowed,
   };
 }

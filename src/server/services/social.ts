@@ -98,9 +98,16 @@ export async function uploadUserPreset(input: {
   fiveMbUrl?: string;
 }) {
   const title = sanitizeText(input.title, 120) || "Preset saya";
-  const videoUrl = sanitizeText(input.videoUrl, 900);
-  if (!videoUrl || !(/^(https?:\/\/|\/uploads\/)/i.test(videoUrl))) {
-    return { ok: false as const, message: "Video upload tidak valid" };
+  // Keep path as-is (do not over-sanitize query strings like ?f=file.mp4)
+  const videoUrl = (input.videoUrl || "").trim().slice(0, 900);
+  const okVideo =
+    Boolean(videoUrl) &&
+    (/^https?:\/\//i.test(videoUrl) ||
+      videoUrl.startsWith("/uploads/") ||
+      videoUrl.startsWith("/api/media/local") ||
+      videoUrl.startsWith("/api/media/"));
+  if (!okVideo) {
+    return { ok: false as const, message: "Video upload tidak valid — pilih ulang dari galeri" };
   }
   const xmlUrl = input.xmlUrl ? sanitizeText(input.xmlUrl, 900) : null;
   const fiveMbUrl = input.fiveMbUrl ? sanitizeText(input.fiveMbUrl, 900) : null;
