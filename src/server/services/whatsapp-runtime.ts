@@ -169,7 +169,11 @@ function identityLabel(cfg: { platform: string; browser: string }): string {
 }
 
 function sessionDir(): string {
-  const dir = process.env.WA_SESSION_DIR ?? path.join(process.cwd(), ".spaceprs-session");
+  // turbopackIgnore: process.cwd() is runtime-only (session on disk), not a static asset path.
+  const base = process.env.WA_SESSION_DIR?.trim()
+    ? process.env.WA_SESSION_DIR.trim()
+    : path.join(/* turbopackIgnore: true */ process.cwd(), ".spaceprs-session");
+  const dir = base;
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   return dir;
 }
