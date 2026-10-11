@@ -3,7 +3,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build --webpack",
+    "build": "next build",
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit"
@@ -17,8 +17,7 @@
     "react": "19.2.6",
     "react-dom": "19.2.6",
     "sharp": "^0.35.5",
-    "zod": "^4.6.5",
-    "pino": "^9.6.0"
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "4.1.17",
