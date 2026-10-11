@@ -102,7 +102,17 @@ export function PresetCard({ preset, compact = false }: { preset: PresetItem; co
     const el = videoRef.current;
     if (!el) return;
     if (el.paused) {
-      void el.play().then(() => setPlaying(true)).catch(() => setMediaFailed(true));
+      // User gesture → allow sound (browsers block autoplay-with-audio otherwise)
+      el.muted = false;
+      el.volume = 1;
+      void el.play().then(() => setPlaying(true)).catch(() => {
+        // Fallback: try muted then unmute
+        el.muted = true;
+        void el.play().then(() => {
+          el.muted = false;
+          setPlaying(true);
+        }).catch(() => setMediaFailed(true));
+      });
     } else {
       el.pause();
       setPlaying(false);
@@ -118,10 +128,10 @@ export function PresetCard({ preset, compact = false }: { preset: PresetItem; co
               ref={videoRef}
               src={stream}
               poster={preset.thumbProxyUrl ?? preset.thumbnailUrl ?? undefined}
-              muted
               loop
               playsInline
               preload="metadata"
+              controls={playing}
               className="h-full w-full object-cover"
               onError={() => setMediaFailed(true)}
               onPlay={() => setPlaying(true)}
@@ -216,8 +226,14 @@ export function PresetCard({ preset, compact = false }: { preset: PresetItem; co
               {(preset.favoriteCount ?? 0) > 0 ? ` · ♥ ${formatCount(preset.favoriteCount ?? 0)}` : ""}
             </p>
             {preset.xmlUrl ? (
-              <a href={preset.xmlUrl} target="_blank" rel="noopener noreferrer nofollow" className="btn-xml">
-                ⬇ Buka XML
+              <a
+                href={`/api/preset/${preset.id}/xml`}
+                target="_blank"
+                rel="noopener noreferrer nofollow"
+                className="btn-xml"
+                title="XML + suara otomatis untuk Alight Motion"
+              >
+                ⬇ Buka XML + Suara
               </a>
             ) : (
               <span className="btn flex-1 !py-1.5 !text-[11px] !text-slate-400">XML —</span>

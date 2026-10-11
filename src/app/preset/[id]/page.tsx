@@ -46,8 +46,7 @@ export default async function PresetDetailPage({ params }: { params: Promise<{ i
             poster={preset.thumbProxyUrl ?? preset.thumbnailUrl ?? undefined}
             controls
             playsInline
-            muted
-            loop
+                        loop
             preload="metadata"
             className="h-full w-full object-cover"
           >
@@ -61,9 +60,9 @@ export default async function PresetDetailPage({ params }: { params: Promise<{ i
             {preset.durationSec ? <span className="chip">{preset.durationSec}s</span> : null}
           </div>
           <div className="grid grid-cols-2 gap-2">
-            {xmlLink ? (
-              <a href={xmlLink.url} target="_blank" rel="noopener noreferrer nofollow" className="btn btn-primary !text-xs">
-                Gunakan XML
+            {xmlLink || preset.xmlUrl ? (
+              <a href={`/api/preset/${preset.id}/xml`} target="_blank" rel="noopener noreferrer nofollow" className="btn btn-primary !text-xs" title="XML dengan suara otomatis">
+                Gunakan XML + Suara
               </a>
             ) : (
               <span className="btn !text-xs !text-slate-400">XML belum ditemukan</span>
