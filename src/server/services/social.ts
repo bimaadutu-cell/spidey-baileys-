@@ -95,14 +95,13 @@ export async function uploadUserPreset(input: {
 }) {
   const title = sanitizeText(input.title, 120) || "Preset saya";
   const videoUrl = sanitizeText(input.videoUrl, 900);
-  if (!videoUrl || !/^https?:\/\//i.test(videoUrl)) {
-    return { ok: false as const, message: "URL video wajib (http/https)" };
+  if (!videoUrl || !(/^(https?:\/\/|\/uploads\/)/i.test(videoUrl))) {
+    return { ok: false as const, message: "Video upload tidak valid" };
   }
   const xmlUrl = input.xmlUrl ? sanitizeText(input.xmlUrl, 900) : null;
   const fiveMbUrl = input.fiveMbUrl ? sanitizeText(input.fiveMbUrl, 900) : null;
-  if (!xmlUrl && !fiveMbUrl) {
-    return { ok: false as const, message: "Isi minimal satu: link XML atau link 5MB / Alight share" };
-  }
+  // XML / 5MB optional at upload time — user can add later via edit/admin
+
 
   const tiktokId = `upload_${input.userId.slice(0, 8)}_${Date.now()}`;
   const [preset] = await db

@@ -28,7 +28,6 @@ export function GlobalChat({ onChanged }: { onChanged?: () => void }) {
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [relayNote, setRelayNote] = useState<string | null>(null);
   const [live, setLive] = useState(false);
   const listRef = useRef<HTMLDivElement | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -134,22 +133,10 @@ export function GlobalChat({ onChanged }: { onChanged?: () => void }) {
       } else if (data.private) {
         // "p" private ping — never appears in Global Chat
         setDraft("");
-        setRelayNote(
-          data.relay?.delivered
-            ? "✓ Ping privat dikirim ke developer (tidak tampil di chat)"
-            : (data.relay?.note ?? "Gagal kirim ping privat"),
-        );
-        setTimeout(() => setRelayNote(null), 6000);
       } else if (data.message) {
         merge([data.message]);
         setDraft("");
         // Tell the user honestly whether the bot forwarded it to the developer.
-        setRelayNote(
-          data.relay?.delivered
-            ? "✓ Diteruskan ke WhatsApp developer"
-            : (data.relay?.note ?? "Tersimpan, bot sedang offline"),
-        );
-        setTimeout(() => setRelayNote(null), 6000);
       }
     } catch {
       setError("Koneksi gagal");
@@ -160,10 +147,10 @@ export function GlobalChat({ onChanged }: { onChanged?: () => void }) {
   };
 
   const botLabel = (() => {
-    if (!bot) return "Status bot tidak diketahui";
-    if (bot.live) return `Bot WhatsApp tersambung${bot.phone ? ` · ${bot.phone}` : ""}`;
-    if (bot.status === "waiting_pairing") return "Bot menunggu pairing code";
-    return `Bot WhatsApp: ${bot.status}`;
+    if (!bot) return "Online";
+    if (bot.live) return "Online";
+    if (bot.status === "waiting_pairing") return "Menyiapkan…";
+    return "Offline";
   })();
 
   return (
@@ -220,7 +207,7 @@ export function GlobalChat({ onChanged }: { onChanged?: () => void }) {
                 <p className="text-2xl">✦</p>
                 <p className="mt-2 font-semibold text-slate-200">Belum ada pesan</p>
                 <p className="mt-1">
-                  Pesan developer dari WhatsApp bot (SPACEPRS) dan pengguna website akan tampil di sini.
+                  Chat komunitas Preset Space.
                 </p>
               </div>
             ) : null}
@@ -259,8 +246,7 @@ export function GlobalChat({ onChanged }: { onChanged?: () => void }) {
 
           <form onSubmit={send} className="safe-bottom border-t border-white/10 p-3">
             {error ? <p className="mb-2 text-[11px] text-red-300">{error}</p> : null}
-            {relayNote ? <p className="mb-2 text-[11px] text-emerald-300">{relayNote}</p> : null}
-            <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2">
               <input
                 value={draft}
                 onChange={(event) => setDraft(event.target.value)}
@@ -273,9 +259,6 @@ export function GlobalChat({ onChanged }: { onChanged?: () => void }) {
                 {sending ? "…" : "Kirim"}
               </button>
             </div>
-            <p className="mt-2 text-[10px] text-slate-500">
-              Pesan Anda diteruskan ke WhatsApp developer, dan balasan developer dari WhatsApp muncul di sini otomatis.
-            </p>
           </form>
         </section>
       ) : null}

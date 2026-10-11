@@ -137,11 +137,12 @@ export function AccountPanel() {
   const [reviews, setReviews] = useState<ReviewDto[]>([]);
   const [stats, setStats] = useState<{ followers: number; following: number; favorites: number; uploads: number } | null>(null);
   const [uploadTitle, setUploadTitle] = useState("");
-  const [uploadVideo, setUploadVideo] = useState("");
   const [uploadXml, setUploadXml] = useState("");
   const [uploadFive, setUploadFive] = useState("");
   const [uploadMsg, setUploadMsg] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [videoPreview, setVideoPreview] = useState<string | null>(null);
 
   // --- ALL hooks run unconditionally (Rules of Hooks) -------------------
   const username = user?.username ?? "";
@@ -247,37 +248,75 @@ export function AccountPanel() {
 
         <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-4">
           <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Upload preset ke Preset Space</p>
-          <p className="mt-1 text-[11px] text-slate-400">Isi link video + XML dan/atau 5MB. Setelah upload muncul di Discover (FYP) dengan tombol Buka XML / Buka 5MB.</p>
+          <p className="mt-1 text-[11px] text-slate-400">
+            Pilih video dari galeri HP, cek preview, lalu upload. Opsional: tempel link XML / 5MB agar tombol Buka XML &amp; Buka 5MB aktif.
+          </p>
           <div className="mt-3 grid gap-2">
-            <input value={uploadTitle} onChange={(e) => setUploadTitle(e.target.value)} placeholder="Judul preset" className="rounded-xl border border-white/12 bg-black/30 px-3 py-2 text-sm outline-none" />
-            <input value={uploadVideo} onChange={(e) => setUploadVideo(e.target.value)} placeholder="URL video (https://...)" className="rounded-xl border border-white/12 bg-black/30 px-3 py-2 text-sm outline-none" />
-            <input value={uploadXml} onChange={(e) => setUploadXml(e.target.value)} placeholder="Link XML (opsional)" className="rounded-xl border border-white/12 bg-black/30 px-3 py-2 text-sm outline-none" />
-            <input value={uploadFive} onChange={(e) => setUploadFive(e.target.value)} placeholder="Link 5MB / Alight share (opsional)" className="rounded-xl border border-white/12 bg-black/30 px-3 py-2 text-sm outline-none" />
+            <input
+              value={uploadTitle}
+              onChange={(e) => setUploadTitle(e.target.value)}
+              placeholder="Judul preset"
+              className="rounded-xl border border-white/12 bg-black/30 px-3 py-2 text-sm outline-none"
+            />
+            <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-white/20 bg-black/20 px-4 py-6 text-center transition hover:border-white/40">
+              <span className="text-2xl">🎬</span>
+              <span className="text-sm font-semibold text-white">{videoFile ? videoFile.name : "Pilih video dari galeri"}</span>
+              <span className="text-[11px] text-slate-400">Ketuk untuk membuka galeri · MP4 / MOV · max 80MB</span>
+              <input
+                type="file"
+                accept="video/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0] ?? null;
+                  if (videoPreview) URL.revokeObjectURL(videoPreview);
+                  setVideoFile(file);
+                  setVideoPreview(file ? URL.createObjectURL(file) : null);
+                  setUploadMsg(null);
+                }}
+              />
+            </label>
+            {videoPreview ? (
+              <div className="overflow-hidden rounded-2xl border border-white/10 bg-black">
+                <video src={videoPreview} controls playsInline className="mx-auto max-h-64 w-full object-contain" />
+                <p className="px-3 py-2 text-[11px] text-slate-400">Preview — pastikan video sudah benar sebelum upload</p>
+              </div>
+            ) : null}
+            <input
+              value={uploadXml}
+              onChange={(e) => setUploadXml(e.target.value)}
+              placeholder="Link XML (opsional)"
+              className="rounded-xl border border-white/12 bg-black/30 px-3 py-2 text-sm outline-none"
+            />
+            <input
+              value={uploadFive}
+              onChange={(e) => setUploadFive(e.target.value)}
+              placeholder="Link 5MB / Alight share (opsional)"
+              className="rounded-xl border border-white/12 bg-black/30 px-3 py-2 text-sm outline-none"
+            />
             <button
-              disabled={uploading || !uploadTitle.trim() || !uploadVideo.trim()}
+              disabled={uploading || !uploadTitle.trim() || !videoFile}
               className="btn btn-primary !text-xs"
               onClick={() => {
                 void (async () => {
+                  if (!videoFile) return;
                   setUploading(true);
                   setUploadMsg(null);
                   try {
-                    const res = await fetch("/api/upload", {
-                      method: "POST",
-                      headers: { "content-type": "application/json" },
-                      body: JSON.stringify({
-                        title: uploadTitle,
-                        videoUrl: uploadVideo,
-                        xmlUrl: uploadXml || undefined,
-                        fiveMbUrl: uploadFive || undefined,
-                      }),
-                    });
+                    const body = new FormData();
+                    body.append("title", uploadTitle);
+                    body.append("video", videoFile);
+                    if (uploadXml.trim()) body.append("xmlUrl", uploadXml.trim());
+                    if (uploadFive.trim()) body.append("fiveMbUrl", uploadFive.trim());
+                    const res = await fetch("/api/upload", { method: "POST", body });
                     const data = (await res.json()) as { ok?: boolean; message?: string; error?: string };
-                    setUploadMsg(data.message ?? data.error ?? (data.ok ? "Berhasil" : "Gagal"));
+                    setUploadMsg(data.message ?? data.error ?? (data.ok ? "Berhasil di-upload" : "Gagal"));
                     if (data.ok) {
                       setUploadTitle("");
-                      setUploadVideo("");
                       setUploadXml("");
                       setUploadFive("");
+                      setVideoFile(null);
+                      if (videoPreview) URL.revokeObjectURL(videoPreview);
+                      setVideoPreview(null);
                       const s = await fetch("/api/social");
                       const sj = (await s.json()) as { stats?: typeof stats };
                       if (sj.stats) setStats(sj.stats);

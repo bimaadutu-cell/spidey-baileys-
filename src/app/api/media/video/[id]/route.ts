@@ -29,6 +29,32 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
   const stored = await getStoredVideo(id);
   if (stored) return serveStoredVideo(stored, range);
 
+  // 1b. user-uploaded local file under /uploads
+  const rowsLocal = await db
+    .select({ videoUrl: presets.videoUrl })
+    .from(presets)
+    .where(eq(presets.id, id))
+    .limit(1);
+  const localUrl = rowsLocal[0]?.videoUrl ?? "";
+  if (localUrl.startsWith("/uploads/")) {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const filePath = path.join(process.cwd(), "public", localUrl.replace(/^\//, ""));
+    if (fs.existsSync(filePath)) {
+      const stat = fs.statSync(filePath);
+      const data = fs.readFileSync(filePath);
+      return new Response(data, {
+        status: 200,
+        headers: {
+          "Content-Type": "video/mp4",
+          "Content-Length": String(stat.size),
+          "Accept-Ranges": "bytes",
+          "Cache-Control": "public, max-age=86400",
+        },
+      });
+    }
+  }
+
   // 2. live resolve
   const resolved = await resolvePlayableUrl(id);
   if (!resolved.url) {
