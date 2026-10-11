@@ -1,6 +1,0 @@
-node_modules
-.next
-.env
-.env.*
-data/whatsapp-auth
-*.log

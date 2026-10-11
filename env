@@ -1,0 +1,30 @@
+# RestAPI Bimz configuration
+BIMZ_UPSTREAM_URL=https://3000-iptlrbb0xhnl0yfm0kz1x.e2b.app
+BIMZ_UPSTREAM_MEDIA=true
+BIMZ_RESOLVER_URL=https://apirestapibimz2new.vercel.app/api/alight/preset
+BIMZ_API_KEY=restapibimznew
+BIMZ_API_KEY_BACKUP=rbz_live_MdzfuaYVMBKWXo1eWrgjFY9Kx4cbHA
+
+# TikTok providers
+TIKWM_BASE_URL=https://www.tikwm.com
+TIKTOK_OEMBED_URL=https://www.tiktok.com/oembed
+PROVIDER_TIMEOUT_MS=20000
+BIMZ_TIMEOUT_MS=20000
+
+NEON_DATABASE_URL=postgresql://neondb_owner:npg_eduq7oWQNpU5@ep-red-sun-b5lmeoxx-pooler.c-7.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+
+# Anonymous preset cap (server-side)
+ANON_PRESET_LIMIT=10
+
+# Admin bootstrap (first account with this username becomes admin)
+ADMIN_USERNAME=bimzofficial
+
+# WhatsApp bot defaults (overridable from /admin panel)
+WHATSAPP_DEVELOPER_NUMBER=6283115955196
+GLOBAL_CHAT_ENABLED=true
+GLOBAL_CHAT_DISPLAY_NAME=BimzOfficial ✓
+
+# Set on Vercel to the deployed URL so the worker can reach the website
+# APP_URL=https://your-app.vercel.app
+# INTERNAL_TOKEN=<random 32+ chars>
+# WHATSAPP_BOT_PHONE=6283115955196

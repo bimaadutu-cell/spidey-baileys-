@@ -1,134 +1,169 @@
 "use client";
-import React, { useRef } from "react";
-import { motion } from "framer-motion";
-import { IconDash, IconChat, IconUsers, IconGear, IconTelegram, IconMoon, IconSun, IconBolt, IconWifi } from "@/components/icons";
-import type { BootData } from "@/lib/client";
 
-export type View = "dashboard" | "chat" | "users" | "settings";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useSession } from "./hooks";
+import { Avatar } from "./avatar";
+import { GlobalChat } from "./global-chat";
 
-const NAV: { id: View; label: string; icon: (p: any) => React.ReactElement }[] = [
-  { id: "dashboard", label: "Dashboard", icon: IconDash },
-  { id: "chat", label: "Live Chat", icon: IconChat },
-  { id: "users", label: "Pengguna", icon: IconUsers },
-  { id: "settings", label: "Pengaturan", icon: IconGear },
+type BeforeInstallPromptEvent = Event & { prompt: () => Promise<void> };
+
+const NAV = [
+  { href: "/", label: "Home", icon: "◆" },
+  { href: "/discover", label: "Discover", icon: "▶" },
+  { href: "/premium-alight", label: "Premium", icon: "✦" },
+  { href: "/ulasan", label: "Ulasan", icon: "★" },
+  { href: "/account", label: "Akun", icon: "☺" },
 ];
 
-export default function Shell({ view, setView, boot, theme, setTheme, onSecret, children }: {
-  view: View;
-  setView: (v: View) => void;
-  boot: BootData | null;
-  theme: string;
-  setTheme: (t: string) => void;
-  onSecret: () => void;
-  children: React.ReactNode;
-}) {
-  const clicks = useRef<number[]>([]);
-  const bot = boot?.bot;
-  const online = !!(boot?.connected && boot?.live?.apiOnline !== false);
+export function AppShell({ children }: { children: React.ReactNode }) {
+  const { user, reload } = useSession();
+  const router = useRouter();
+  const [query, setQuery] = useState("");
+  const [installEvent, setInstallEvent] = useState<BeforeInstallPromptEvent | null>(null);
 
-  const secretClick = () => {
-    const now = Date.now();
-    clicks.current = [...clicks.current.filter((t) => now - t < 2600), now];
-    if (clicks.current.length >= 7) { clicks.current = []; onSecret(); }
+  useEffect(() => {
+    const handler = (event: Event) => {
+      event.preventDefault();
+      setInstallEvent(event as BeforeInstallPromptEvent);
+    };
+    window.addEventListener("beforeinstallprompt", handler);
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js").catch(() => undefined);
+    }
+    return () => window.removeEventListener("beforeinstallprompt", handler);
+  }, []);
+
+  const submitSearch = (event: React.FormEvent) => {
+    event.preventDefault();
+    const term = query.trim();
+    router.push(term ? `/?q=${encodeURIComponent(term)}` : "/");
   };
 
-  const Brand = (
-    <button onClick={secretClick} className="group flex select-none items-center gap-2.5 outline-none" title="AKSESBOTMU">
-      <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-[var(--line2)] bg-[var(--panel)] text-[var(--text)] transition group-hover:shadow-[0_0_18px_-4px_var(--glow)]">
-        <IconTelegram size={19} />
-      </span>
-      <span className="font-mono2 text-[15px] font-bold tracking-[0.22em]">AKSESBOTMU</span>
-    </button>
-  );
+  const logout = async () => {
+    await fetch("/api/auth/logout", { method: "POST" });
+    await reload();
+    router.push("/");
+  };
 
   return (
-    <div className="flex min-h-screen">
-      {/* ---------- sidebar (desktop) ---------- */}
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r border-[var(--line)] bg-[var(--bg2)]/70 backdrop-blur-xl lg:flex">
-        <div className="flex h-16 items-center border-b border-[var(--line)] px-5">{Brand}</div>
+    <div className="relative z-10 flex min-h-dvh flex-col">
+      <header className="sticky top-0 z-40 glass border-b border-white/10">
+        <div className="mx-auto flex w-full max-w-7xl items-center gap-3 px-4 py-3 sm:gap-5 sm:px-6">
+          <Link href="/" className="group flex items-center gap-2.5 shrink-0">
+            <span className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-white to-slate-300 text-[15px] font-black text-black shadow-[0_10px_30px_-12px_rgba(255,255,255,0.8)]">
+              预
+            </span>
+            <span className="hidden leading-tight sm:block">
+              <span className="block text-[15px] font-bold neon-text">预设空间</span>
+              <span className="block text-[10px] tracking-[0.22em] text-slate-400">PRESET SPACE</span>
+            </span>
+          </Link>
 
-        <nav className="flex-1 space-y-1 overflow-y-auto p-3">
-          {NAV.map((n) => (
+          <form onSubmit={submitSearch} className="relative flex-1">
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Cari preset, kreator, sound…"
+              aria-label="Cari preset"
+              className="w-full rounded-full border border-white/12 bg-white/5 px-4 py-2.5 pr-11 text-sm text-slate-100 placeholder:text-slate-500 outline-none transition focus:border-white/35 focus:bg-white/8"
+            />
             <button
-              key={n.id}
-              onClick={() => setView(n.id)}
-              className={`flex w-full items-center gap-3 rounded-xl border px-3.5 py-2.5 text-[13.5px] font-semibold transition ${
-                view === n.id
-                  ? "border-[var(--line2)] bg-[var(--text)] text-[var(--bg)] shadow-[0_0_22px_-8px_var(--glow)]"
-                  : "border-transparent text-[var(--muted)] hover:bg-[var(--panel)] hover:text-[var(--text)]"
-              }`}
+              type="submit"
+              aria-label="Cari"
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-full bg-white/10 px-3 py-1.5 text-xs text-slate-200 transition hover:bg-white/20"
             >
-              <n.icon size={17} /> {n.label}
+              ⌕
             </button>
-          ))}
+          </form>
 
-          <div className="panel mt-4 p-3.5">
-            <div className="flex items-center gap-2.5">
-              {bot?.photoUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={bot.photoUrl} alt="bot" className="h-9 w-9 rounded-full border border-[var(--line2)] object-cover" />
-              ) : (
-                <span className="flex h-9 w-9 items-center justify-center rounded-full border border-[var(--line2)] bg-[var(--panel2)]"><IconTelegram size={16} /></span>
-              )}
-              <div className="min-w-0">
-                <p className="truncate text-[13px] font-bold">{bot?.name ?? "Bot"}</p>
-                <p className="truncate font-mono2 text-[10.5px] text-[var(--muted)]">@{bot?.username ?? "-"}</p>
-              </div>
-            </div>
-            <div className="mt-3 flex items-center justify-between">
-              <span className="chip !py-1">
-                <span className={`inline-block h-1.5 w-1.5 rounded-full ${online ? "pulse-dot bg-[var(--ok)] text-[var(--ok)]" : "bg-[var(--bad)]"}`} />
-                {online ? "Online" : "Offline"}
-              </span>
-              <span className="chip !py-1 font-mono2">{boot?.live?.latencyMs ?? "—"}ms</span>
-            </div>
-            <div className="mt-2 flex items-center gap-1.5 font-mono2 text-[10px] uppercase tracking-widest text-[var(--faint)]">
-              <IconWifi size={12} /> {boot?.bot?.mode === "webhook" ? "Webhook" : "Long Polling"}
-            </div>
-          </div>
-        </nav>
+          <nav className="hidden items-center gap-1 md:flex">
+            {NAV.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="rounded-full px-3.5 py-2 text-sm text-slate-300 transition hover:bg-white/10 hover:text-white"
+              >
+                {item.label}
+              </Link>
+            ))}
+            {user?.role === "admin" || user?.role === "developer" ? (
+              <Link
+                href="/admin"
+                className="rounded-full px-3.5 py-2 text-sm text-slate-300 transition hover:bg-white/10 hover:text-white"
+              >
+                Admin
+              </Link>
+            ) : null}
+          </nav>
 
-        <div className="border-t border-[var(--line)] p-4">
-          <p className="font-mono2 text-[10.5px] leading-relaxed text-[var(--faint)]">
-            Aksesbotmu © 2026<br />Developed by <span className="text-[var(--muted)]">Bimz Official</span>
-          </p>
-        </div>
-      </aside>
-
-      {/* ---------- main column ---------- */}
-      <div className="flex min-w-0 flex-1 flex-col lg:pl-60">
-        <header className="sticky top-0 z-20 flex h-16 items-center justify-between gap-3 border-b border-[var(--line)] bg-[var(--bg)]/75 px-4 backdrop-blur-xl sm:px-6">
-          <div className="lg:hidden">{Brand}</div>
-          <div className="hidden items-center gap-2 lg:flex">
-            <motion.span key={view} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="text-[15px] font-bold capitalize">
-              {NAV.find((n) => n.id === view)?.label}
-            </motion.span>
-          </div>
           <div className="flex items-center gap-2">
-            <span className="chip font-mono2 !text-[10.5px]">
-              <IconBolt size={12} /> {boot?.live?.latencyMs ?? "—"}ms
-            </span>
-            <span className={`chip !text-[10.5px] ${online ? "!text-[var(--ok)]" : "!text-[var(--bad)]"}`}>
-              <span className={`h-1.5 w-1.5 rounded-full ${online ? "pulse-dot bg-current" : "bg-current"}`} />
-              {online ? "BOT ONLINE" : "OFFLINE"}
-            </span>
-            <button className="btn btn-xs" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} title="Ganti tema">
-              {theme === "dark" ? <IconSun size={14} /> : <IconMoon size={14} />}
-            </button>
+            {installEvent ? (
+              <button
+                onClick={() => {
+                  void installEvent.prompt();
+                  setInstallEvent(null);
+                }}
+                className="chip hidden sm:inline-flex"
+                title="Instal aplikasi"
+              >
+                ⤓ Install
+              </button>
+            ) : null}
+
+            {user ? (
+              <div className="flex items-center gap-2">
+                <Link href="/account" className="flex items-center gap-2 rounded-full border border-white/12 bg-white/5 py-1 pl-1 pr-3 transition hover:border-white/30">
+                  <Avatar seed={user.avatarKey || user.username} size={28} />
+                  <span className="hidden text-xs font-medium text-slate-200 sm:block">
+                    {user.displayName || user.username}
+                  </span>
+                </Link>
+                <button onClick={() => void logout()} className="hidden rounded-full border border-white/12 px-3 py-1.5 text-xs text-slate-300 transition hover:bg-white/10 sm:block">
+                  Keluar
+                </button>
+              </div>
+            ) : (
+              <Link href="/login" className="btn btn-primary !py-2 !text-xs">
+                Login
+              </Link>
+            )}
           </div>
-        </header>
+        </div>
+      </header>
 
-        <main className="min-w-0 flex-1 pb-24 lg:pb-8">{children}</main>
+      <main className="mx-auto w-full max-w-7xl flex-1 px-4 pb-28 pt-6 sm:px-6 md:pb-16">{children}</main>
 
-        {/* ---------- bottom nav (mobile) ---------- */}
-        <nav className="fixed inset-x-0 bottom-0 z-30 flex border-t border-[var(--line)] bg-[var(--bg2)]/85 backdrop-blur-xl lg:hidden">
-          {NAV.map((n) => (
-            <button key={n.id} onClick={() => setView(n.id)} className={`flex flex-1 flex-col items-center gap-1 py-2.5 text-[10px] font-semibold ${view === n.id ? "text-[var(--text)]" : "text-[var(--faint)]"}`}>
-              <n.icon size={19} /> {n.label}
-            </button>
-          ))}
-        </nav>
-      </div>
+      <footer className="safe-bottom glass border-t border-white/10 px-4 py-6 text-center text-xs text-slate-500">
+        <p>
+          预设空间 | Preset Space — <span className="text-slate-300">Find it. Preset it. Create it.</span>
+        </p>
+        <p className="mt-1">Developer BimzOfficial ✓ · Preset ditemukan dari konten publik TikTok, bukan konten milik Preset Space.</p>
+      </footer>
+
+      <MobileNav isAdmin={user?.role === "admin" || user?.role === "developer"} />
+      <GlobalChat onChanged={reload} />
     </div>
+  );
+}
+
+function MobileNav({ isAdmin }: { isAdmin: boolean }) {
+  const items = [...NAV, ...(isAdmin ? [{ href: "/admin", label: "Admin", icon: "⚙" }] : [])];
+  return (
+    <nav className="safe-bottom fixed inset-x-0 bottom-0 z-40 glass border-t border-white/10 md:hidden">
+      <div className="mx-auto flex max-w-md items-center justify-around px-3 py-2">
+        {items.map((item) => (
+          <Link
+            key={item.href}
+            href={item.href}
+            className="flex flex-1 flex-col items-center gap-0.5 rounded-xl py-1.5 text-[10px] text-slate-400 transition active:scale-95 hover:text-white"
+          >
+            <span className="text-base leading-none">{item.icon}</span>
+            {item.label}
+          </Link>
+        ))}
+      </div>
+    </nav>
   );
 }
