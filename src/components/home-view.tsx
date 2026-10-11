@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { PresetGrid, PresetSkeletonGrid, type PresetItem } from "./preset";
 import { ReviewForm } from "./forms";
 import { usePagedQuery, useDebounced, useLocalFavorites, useSession, useActiveScans } from "./hooks";
+import { LiveWallpaper } from "./live-wallpaper";
 
 export type CategoryDto = { slug: string; label: string; labelCn: string | null; count: number };
 
@@ -140,6 +141,7 @@ export function HomeView({ initialQuery, favoritesOnly }: { initialQuery: string
 
   return (
     <div className="space-y-10">
+      <LiveWallpaper />
       {/* ------------------------------------------- premium calling banner */}
       <Link
         href="/premium-alight"
@@ -165,7 +167,7 @@ export function HomeView({ initialQuery, favoritesOnly }: { initialQuery: string
 
       {/* ---------------------------------------------------------- hero */}
       <section className="card-3d relative overflow-hidden rounded-[30px] p-6 sm:p-10">
-        <div className="pointer-events-none absolute -right-16 -top-20 h-64 w-64 rounded-full bg-white/10 blur-3xl" />
+        <div className="pointer-events-none absolute -right-16 -top-20 h-48 w-48 rounded-full bg-white/8" />
         <span className="chip">预设空间 · PRESET SPACE</span>
         <h1 className="mt-4 max-w-3xl text-3xl font-black leading-tight neon-text sm:text-5xl">
           Welcome to <span className="text-amber-300">Preset Space</span>

@@ -109,9 +109,19 @@ export async function uploadUserPreset(input: {
   if (!okVideo) {
     return { ok: false as const, message: "Video upload tidak valid — pilih ulang dari galeri" };
   }
-  const xmlUrl = input.xmlUrl ? sanitizeText(input.xmlUrl, 900) : null;
-  const fiveMbUrl = input.fiveMbUrl ? sanitizeText(input.fiveMbUrl, 900) : null;
-  // XML / 5MB optional at upload time — user can add later via edit/admin
+  let xmlUrl = input.xmlUrl ? sanitizeText(input.xmlUrl, 900) : null;
+  let fiveMbUrl = input.fiveMbUrl ? sanitizeText(input.fiveMbUrl, 900) : null;
+  // Alight share links are project packages (5MB), not raw XML files
+  const isAlightShare = (u: string | null) => Boolean(u && /alightcreative\.com\/am\/share/i.test(u));
+  if (isAlightShare(xmlUrl) && !fiveMbUrl) {
+    fiveMbUrl = xmlUrl;
+  }
+  if (isAlightShare(fiveMbUrl) && !xmlUrl) {
+    // keep fiveMb; xml stays null unless it's a real .xml
+  }
+  if (xmlUrl && isAlightShare(xmlUrl) && fiveMbUrl === xmlUrl) {
+    // prefer showing as 5MB button; still keep xmlUrl so both can show if needed
+  }
 
 
   const tiktokId = `upload_${input.userId.slice(0, 8)}_${Date.now()}`;
