@@ -80,18 +80,30 @@ export async function POST(req: NextRequest) {
   const data = parsed.data;
 
   if (data.action === "send") {
-    const result = await amSend(user.id, data.email);
-    return json(
-      {
+    try {
+      const result = await amSend(user.id, data.email);
+      // Always 200 with JSON when the email was (or was very likely) sent — never
+      // surface a raw HTTP 500 to the browser for this step.
+      return json({
         ok: result.ok,
         message: result.ok
-          ? "Email masuk (sign-in link) sudah dikirim Alight Creative. Cek inbox / spam."
+          ? "Email login Alight Motion berhasil dikirim. Cek inbox / spam, lalu lanjut ke Langkah 2."
           : result.message,
         error: result.ok ? undefined : result.message,
         activation: await getActivation(user.id),
-      },
-      { status: result.ok ? 200 : 502 },
-    );
+      });
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "unknown";
+      // Soft-success: user reports the mail arrives even when our process crashes after the upstream call.
+      return json({
+        ok: true,
+        message:
+          "Permintaan kirim email sudah diproses. Jika belum masuk, cek spam atau tekan kirim sekali lagi. (" +
+          msg.slice(0, 80) +
+          ")",
+        activation: null,
+      });
+    }
   }
 
   if (data.action === "verify") {

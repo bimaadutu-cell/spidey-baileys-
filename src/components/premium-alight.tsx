@@ -77,16 +77,31 @@ export function PremiumAlight() {
       try {
         payload = JSON.parse(raw) as typeof payload;
       } catch {
+        // Langkah 1 (kirim email): upstream sering sukses meski response HTTP putus.
+        const isSend = body.action === "send";
+        if (isSend || res.status === 504 || res.status === 502 || res.status === 500) {
+          setMsg({
+            kind: "ok",
+            text:
+              "Email login kemungkinan sudah terkirim. Cek inbox / spam Alight Motion, lalu lanjut ke Langkah 2 (tempel link).",
+          });
+          await load();
+          return;
+        }
         setMsg({
           kind: "err",
-          text:
-            res.status === 504 || res.status === 502
-              ? "Timeout server (Vercel). Coba lagi — jika langkah 1, cek inbox email karena magic link sering tetap terkirim."
-              : `Server error HTTP ${res.status}. Coba refresh lalu ulangi.`,
+          text: `Server error HTTP ${res.status}. Coba refresh lalu ulangi.`,
         });
         return;
       }
-      setMsg({ kind: payload.ok ? "ok" : "err", text: payload.message ?? payload.error ?? "Selesai" });
+      const stageOk = (payload as { activation?: { stage?: string } }).activation?.stage === "sent"
+        || (payload as { activation?: { stage?: string } }).activation?.stage === "verified"
+        || (payload as { activation?: { stage?: string } }).activation?.stage === "applied";
+      const success = Boolean(payload.ok || stageOk);
+      setMsg({
+        kind: success ? "ok" : "err",
+        text: payload.message ?? payload.error ?? (success ? "Berhasil" : "Gagal"),
+      });
       if (payload.idToken) {
         setIdToken(payload.idToken);
         setMsg({

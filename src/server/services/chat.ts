@@ -93,11 +93,13 @@ export async function getBotConfig(): Promise<{
 
 function developerIdentityFor(
   jid: string | null,
-  cfg: { botNumber: string; displayName: string },
+  cfg: { botNumber: string; targetNumber: string; displayName: string },
 ): { name: string; isDeveloper: boolean } {
-  const normalizedBot = cfg.botNumber.replace(/\D/g, "");
+  // ONLY the developer WhatsApp number appears in Global Chat as developer.
+  // Bot number = paired device. targetNumber (6283115955196) = human developer who chats the bot.
+  const target = (cfg.targetNumber || config.whatsapp.developerNumber || "").replace(/\D/g, "");
   const candidate = (jid ?? "").replace(/[^0-9]/g, "");
-  const allowed = Boolean(normalizedBot) && candidate === normalizedBot;
+  const allowed = Boolean(target) && candidate === target;
   return {
     name: allowed ? cfg.displayName : sanitizeText(jid ?? "unknown", 60),
     isDeveloper: allowed,

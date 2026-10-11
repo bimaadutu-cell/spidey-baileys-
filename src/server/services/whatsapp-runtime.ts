@@ -422,11 +422,14 @@ async function connectSocket(options?: ConnectOptions): Promise<{ pairingCode: s
         if (!jid || jid.endsWith("@broadcast")) continue;
 
         const fromMe = Boolean(message.key?.fromMe);
-        // When the bot is paired to the developer's OWN number, anything they
-        // type from their phone arrives as fromMe=true and `remoteJid` is the
-        // recipient. Those are developer messages, so attribute them to the
-        // bot number instead of the recipient.
-        const effectiveJid = fromMe ? `${(waState.phone ?? "").replace(/\D/g, "")}@s.whatsapp.net` : jid;
+        // Developer chats the BOT number from their phone (6283115955196 → bot):
+        //   fromMe=false, remoteJid = developer JID  → use remoteJid as-is.
+        // Bot paired to developer phone typing "to itself"/notes:
+        //   fromMe=true → attribute to the paired phone number.
+        const pairedPhone = (waState.phone ?? "").replace(/\D/g, "");
+        const effectiveJid = fromMe
+          ? `${pairedPhone}@s.whatsapp.net`
+          : jid;
 
         // "#balas <ticketId> <text>" answers a support ticket.
         const replyMatch = body.match(/^#balas\s+([0-9a-f-]{8,36})\s+([\s\S]+)$/i);

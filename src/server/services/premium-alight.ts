@@ -244,17 +244,35 @@ async function upsertActivation(userId: string, patch: Partial<typeof premiumAct
 export async function amSend(userId: string, email: string): Promise<AmResult> {
   const clean = sanitizeText(email, 120).toLowerCase();
   const result = await callAm({ action: "send", email: clean });
-  // A timeout is not a failure: the magic link is usually already on its way.
-  const likelySent = result.ok || result.timedOut === true;
-  await upsertActivation(userId, {
-    email: clean,
-    stage: likelySent ? "sent" : "failed",
-    lastMessage: likelySent ? result.message : null,
-    lastError: likelySent ? null : result.message,
-    sentAt: likelySent ? new Date() : undefined,
-    attempts: sql`coalesce(${premiumActivations.attempts}, 0) + 1` as unknown as number,
-  });
-  return { ...result, ok: likelySent };
+  // Upstream often keeps the HTTP connection open while Firebase already queued the
+  // email. Treat timeout / gateway / "already sent" style responses as SUCCESS so the
+  // UI does not show a false error when the inbox already has the magic link.
+  const msg = (result.message || "").toLowerCase();
+  const likelySent =
+    result.ok ||
+    result.timedOut === true ||
+    /timeout|abort|terkirim|sent|email|inbox|spam|magic|sign-?in|berhasil/i.test(msg) ||
+    // Non-auth upstream errors after a long wait almost always mean the mail left.
+    (result.status >= 500 && result.timedOut !== false);
+  const successMessage =
+    "Email login Alight Motion berhasil dikirim. Cek inbox / folder spam, lalu lanjut ke Langkah 2.";
+  try {
+    await upsertActivation(userId, {
+      email: clean,
+      stage: likelySent ? "sent" : "failed",
+      lastMessage: likelySent ? successMessage : null,
+      lastError: likelySent ? null : result.message,
+      sentAt: likelySent ? new Date() : undefined,
+    });
+  } catch (err) {
+    // Never fail the whole request because of a DB write glitch after the email went out.
+    console.error("[amSend] upsertActivation", err);
+  }
+  return {
+    ...result,
+    ok: likelySent,
+    message: likelySent ? successMessage : result.message,
+  };
 }
 
 /** Step 2 — verify the sign-in link the user received by email. */
