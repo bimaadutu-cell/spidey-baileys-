@@ -240,8 +240,46 @@ export function AdminDashboard() {
           >
             {busy === "Sinkron status" ? "Menyinkron…" : "Sinkron status link"}
           </button>
+          <button
+            disabled={busy !== null}
+            onClick={() => {
+              if (typeof window !== "undefined" && window.confirm("Hapus SEMUA riwayat Global Chat?")) {
+                void runAction("/api/admin", { action: "clear_global_chat" }, "Hapus Global Chat");
+              }
+            }}
+            className="btn !text-xs !border-red-400/40 !text-red-200"
+          >
+            {busy === "Hapus Global Chat" ? "Menghapus…" : "Hapus riwayat Global Chat"}
+          </button>
         </div>
         {notice ? <p className="mt-3 text-xs text-slate-300">{notice}</p> : null}
+      </section>
+
+      <section className="card-3d rounded-3xl p-5">
+        <h2 className="text-sm font-bold uppercase tracking-[0.18em] text-slate-400">Hapus ulasan satu per satu</h2>
+        <p className="mt-1 text-[11px] text-slate-500">Masukkan ID ulasan (UUID) lalu hapus. Lihat daftar di API / database.</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <input
+            id="delete-review-id"
+            placeholder="UUID ulasan"
+            className="min-w-[220px] flex-1 rounded-xl border border-white/12 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/35"
+          />
+          <button
+            disabled={busy !== null}
+            onClick={() => {
+              const el = document.getElementById("delete-review-id") as HTMLInputElement | null;
+              const id = el?.value?.trim();
+              if (!id) return;
+              if (typeof window !== "undefined" && window.confirm("Hapus ulasan ini?")) {
+                void runAction("/api/admin", { action: "delete_review", id }, "Hapus ulasan");
+                if (el) el.value = "";
+              }
+            }}
+            className="btn !text-xs !border-red-400/40 !text-red-200"
+          >
+            {busy === "Hapus ulasan" ? "Menghapus…" : "Hapus ulasan"}
+          </button>
+        </div>
       </section>
 
       <section className="card-3d rounded-3xl p-5">

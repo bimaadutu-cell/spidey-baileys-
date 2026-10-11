@@ -135,6 +135,13 @@ export function AccountPanel() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [reviews, setReviews] = useState<ReviewDto[]>([]);
+  const [stats, setStats] = useState<{ followers: number; following: number; favorites: number; uploads: number } | null>(null);
+  const [uploadTitle, setUploadTitle] = useState("");
+  const [uploadVideo, setUploadVideo] = useState("");
+  const [uploadXml, setUploadXml] = useState("");
+  const [uploadFive, setUploadFive] = useState("");
+  const [uploadMsg, setUploadMsg] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   // --- ALL hooks run unconditionally (Rules of Hooks) -------------------
   const username = user?.username ?? "";
@@ -154,6 +161,13 @@ export function AccountPanel() {
         if (!cancelled && data.ok) setReviews(data.items ?? []);
       } catch {
         if (!cancelled) setReviews([]);
+      }
+      try {
+        const res = await fetch("/api/social", { cache: "no-store" });
+        const data = (await res.json()) as { ok: boolean; stats?: { followers: number; following: number; favorites: number; uploads: number } };
+        if (!cancelled && data.ok && data.stats) setStats(data.stats);
+      } catch {
+        /* ignore */
       }
     })();
     return () => {
@@ -220,6 +234,65 @@ export function AccountPanel() {
               <span className="chip">{user.role === "user" ? "Member" : user.role}</span>
               <span className="chip">{avatarLabel(user.avatarKey || user.username)}</span>
             </div>
+            {stats ? (
+              <div className="mt-3 flex flex-wrap gap-3 text-xs text-slate-300">
+                <span><strong className="text-white">{stats.followers}</strong> followers</span>
+                <span><strong className="text-white">{stats.following}</strong> following</span>
+                <span><strong className="text-white">{stats.favorites}</strong> favorit</span>
+                <span><strong className="text-white">{stats.uploads}</strong> upload</span>
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-4">
+          <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Upload preset ke Preset Space</p>
+          <p className="mt-1 text-[11px] text-slate-400">Isi link video + XML dan/atau 5MB. Setelah upload muncul di Discover (FYP) dengan tombol Buka XML / Buka 5MB.</p>
+          <div className="mt-3 grid gap-2">
+            <input value={uploadTitle} onChange={(e) => setUploadTitle(e.target.value)} placeholder="Judul preset" className="rounded-xl border border-white/12 bg-black/30 px-3 py-2 text-sm outline-none" />
+            <input value={uploadVideo} onChange={(e) => setUploadVideo(e.target.value)} placeholder="URL video (https://...)" className="rounded-xl border border-white/12 bg-black/30 px-3 py-2 text-sm outline-none" />
+            <input value={uploadXml} onChange={(e) => setUploadXml(e.target.value)} placeholder="Link XML (opsional)" className="rounded-xl border border-white/12 bg-black/30 px-3 py-2 text-sm outline-none" />
+            <input value={uploadFive} onChange={(e) => setUploadFive(e.target.value)} placeholder="Link 5MB / Alight share (opsional)" className="rounded-xl border border-white/12 bg-black/30 px-3 py-2 text-sm outline-none" />
+            <button
+              disabled={uploading || !uploadTitle.trim() || !uploadVideo.trim()}
+              className="btn btn-primary !text-xs"
+              onClick={() => {
+                void (async () => {
+                  setUploading(true);
+                  setUploadMsg(null);
+                  try {
+                    const res = await fetch("/api/upload", {
+                      method: "POST",
+                      headers: { "content-type": "application/json" },
+                      body: JSON.stringify({
+                        title: uploadTitle,
+                        videoUrl: uploadVideo,
+                        xmlUrl: uploadXml || undefined,
+                        fiveMbUrl: uploadFive || undefined,
+                      }),
+                    });
+                    const data = (await res.json()) as { ok?: boolean; message?: string; error?: string };
+                    setUploadMsg(data.message ?? data.error ?? (data.ok ? "Berhasil" : "Gagal"));
+                    if (data.ok) {
+                      setUploadTitle("");
+                      setUploadVideo("");
+                      setUploadXml("");
+                      setUploadFive("");
+                      const s = await fetch("/api/social");
+                      const sj = (await s.json()) as { stats?: typeof stats };
+                      if (sj.stats) setStats(sj.stats);
+                    }
+                  } catch {
+                    setUploadMsg("Koneksi gagal");
+                  } finally {
+                    setUploading(false);
+                  }
+                })();
+              }}
+            >
+              {uploading ? "Mengupload…" : "Upload ke Preset Space"}
+            </button>
+            {uploadMsg ? <p className="text-xs text-slate-300">{uploadMsg}</p> : null}
           </div>
         </div>
 

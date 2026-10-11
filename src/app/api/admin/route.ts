@@ -88,7 +88,7 @@ export async function GET() {
 }
 
 const actionSchema = z.object({
-  action: z.enum(["retry_scan", "retry_delivery", "keyword_scan", "save_bot_config", "bulk_harvest", "sync_upstream", "ingest_url", "deep_scan", "backfill"]),
+  action: z.enum(["retry_scan", "retry_delivery", "keyword_scan", "save_bot_config", "bulk_harvest", "sync_upstream", "ingest_url", "deep_scan", "backfill", "clear_global_chat", "delete_review"]),
   id: z.string().uuid().optional(),
   keyword: z.string().min(2).max(120).optional(),
   limit: z.number().int().min(1).max(25).optional(),
@@ -210,6 +210,22 @@ export async function POST(req: NextRequest) {
     });
   }
 
+  if (parsed.data.action === "clear_global_chat") {
+    const { clearGlobalChat } = await import("@/server/services/social");
+    const result = await clearGlobalChat();
+    await db.insert(activityLog).values({ actor, action: "clear_global_chat", detail: "Riwayat Global Chat dihapus" });
+    return json(result);
+  }
+
+  if (parsed.data.action === "delete_review") {
+    if (!parsed.data.id) return fail("ID ulasan wajib", 422);
+    const { deleteReviewById } = await import("@/server/services/social");
+    const result = await deleteReviewById(parsed.data.id);
+    await db.insert(activityLog).values({ actor, action: "delete_review", detail: `Ulasan ${parsed.data.id} dihapus` });
+    return json(result);
+  }
+
   // keyword_scan is executed by POST /api/scan?mode=keyword with an admin session.
+
   return json({ ok: true, message: "Gunakan POST /api/scan?mode=keyword untuk menjalankan keyword scan" });
 }

@@ -180,15 +180,38 @@ function sessionDir(): string {
 
 function textOf(message: Record<string, unknown> | null | undefined): string {
   if (!message) return "";
-  const m = message as Record<string, { text?: string; caption?: string } | string | undefined>;
-  if (typeof m.conversation === "string") return m.conversation;
+  const m = message as Record<string, unknown>;
+  if (typeof m.conversation === "string" && m.conversation.trim()) return m.conversation;
   const ext = m.extendedTextMessage as { text?: string } | undefined;
-  if (ext?.text) return ext.text;
+  if (ext?.text?.trim()) return ext.text;
   const img = m.imageMessage as { caption?: string } | undefined;
-  if (img?.caption) return img.caption;
+  if (img?.caption?.trim()) return img.caption;
   const vid = m.videoMessage as { caption?: string } | undefined;
-  if (vid?.caption) return vid.caption;
+  if (vid?.caption?.trim()) return vid.caption;
+  const doc = m.documentMessage as { caption?: string } | undefined;
+  if (doc?.caption?.trim()) return doc.caption;
+  // Ephemeral / view-once wrappers
+  for (const key of ["ephemeralMessage", "viewOnceMessage", "viewOnceMessageV2", "documentWithCaptionMessage"]) {
+    const wrap = m[key] as { message?: Record<string, unknown> } | undefined;
+    if (wrap?.message) {
+      const inner = textOf(wrap.message);
+      if (inner) return inner;
+    }
+  }
   return "";
+}
+
+/** Outbound bot templates must never re-enter Global Chat as "developer" messages. */
+function isBotSystemOutbound(body: string): boolean {
+  const t = body.trim();
+  return (
+    /^🛠️\s*\*?LAPORAN/i.test(t) ||
+    /^\*?LAPORAN KENDALA/i.test(t) ||
+    /^🔔\s*\*?Private Ping/i.test(t) ||
+    /^💬\s*\*?Global Chat/i.test(t) ||
+    /预设空间\s*\|\s*Preset Space/i.test(t) ||
+    /^Balas dengan:\s*#balas/i.test(t)
+  );
 }
 
 /** Delivers queued support tickets to the developer. */
@@ -419,19 +442,26 @@ async function connectSocket(options?: ConnectOptions): Promise<{ pairingCode: s
         const body = textOf(message.message);
         if (!body) continue;
         const jid = message.key?.remoteJid ?? null;
-        if (!jid || jid.endsWith("@broadcast")) continue;
+        if (!jid || jid.endsWith("@broadcast") || jid === "status@broadcast") continue;
 
         const fromMe = Boolean(message.key?.fromMe);
-        // Developer chats the BOT number from their phone (6283115955196 → bot):
-        //   fromMe=false, remoteJid = developer JID  → use remoteJid as-is.
-        // Bot paired to developer phone typing "to itself"/notes:
-        //   fromMe=true → attribute to the paired phone number.
-        const pairedPhone = (waState.phone ?? "").replace(/\D/g, "");
-        const effectiveJid = fromMe
-          ? `${pairedPhone}@s.whatsapp.net`
-          : jid;
 
-        // "#balas <ticketId> <text>" answers a support ticket.
+        // Never re-ingest bot's own outbound system messages into Global Chat.
+        if (fromMe && isBotSystemOutbound(body)) {
+          log("info", `Skip outbound sistem bot: ${body.slice(0, 40)}`);
+          continue;
+        }
+
+        // Resolve sender phone:
+        // - Incoming (developer → bot): remoteJid is the developer (or @lid)
+        // - fromMe on bot device: only accept if paired phone IS the developer number
+        const participant =
+          (message.key as { participant?: string })?.participant ??
+          (message as { participant?: string }).participant ??
+          null;
+        const senderJid = !fromMe ? (participant || jid) : `${(waState.phone ?? "").replace(/\D/g, "")}@s.whatsapp.net`;
+
+        // "#balas <ticketId> <text>" answers a support ticket (developer only).
         const replyMatch = body.match(/^#balas\s+([0-9a-f-]{8,36})\s+([\s\S]+)$/i);
         if (replyMatch) {
           try {
@@ -450,7 +480,7 @@ async function connectSocket(options?: ConnectOptions): Promise<{ pairingCode: s
 
         const result = await ingestWhatsAppMessage({
           clientKey: message.key?.id ?? `${Date.now()}-${Math.random()}`,
-          jid: effectiveJid,
+          jid: senderJid,
           body,
           pushName: message.pushName ?? null,
           fromMe,

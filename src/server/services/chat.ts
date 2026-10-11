@@ -95,13 +95,20 @@ function developerIdentityFor(
   jid: string | null,
   cfg: { botNumber: string; targetNumber: string; displayName: string },
 ): { name: string; isDeveloper: boolean } {
-  // ONLY the developer WhatsApp number appears in Global Chat as developer.
-  // Bot number = paired device. targetNumber (6283115955196) = human developer who chats the bot.
-  const target = (cfg.targetNumber || config.whatsapp.developerNumber || "").replace(/\D/g, "");
-  const candidate = (jid ?? "").replace(/[^0-9]/g, "");
-  const allowed = Boolean(target) && candidate === target;
+  // ONLY messages from the developer number (default 6283115955196) enter Global Chat.
+  const target = (cfg.targetNumber || config.whatsapp.developerNumber || "6283115955196").replace(/\D/g, "");
+  // Strip non-digits; handle jid like 6283115955196:xx@s.whatsapp.net or @lid
+  const raw = (jid ?? "").split("@")[0]?.split(":")[0] ?? "";
+  const candidate = raw.replace(/\D/g, "");
+  // Exact match, or candidate ends with target / target ends with candidate (country-code variants)
+  const allowed =
+    Boolean(target) &&
+    Boolean(candidate) &&
+    (candidate === target ||
+      (candidate.length >= 9 && target.endsWith(candidate)) ||
+      (target.length >= 9 && candidate.endsWith(target)));
   return {
-    name: allowed ? cfg.displayName : sanitizeText(jid ?? "unknown", 60),
+    name: allowed ? cfg.displayName || "BimzOfficial Developer ✓" : sanitizeText(jid ?? "unknown", 60),
     isDeveloper: allowed,
   };
 }

@@ -140,6 +140,9 @@ export const presets = pgTable(
     lastScannedAt: timestamp("last_scanned_at", { withTimezone: true }),
     nextRetryAt: timestamp("next_retry_at", { withTimezone: true }),
     scanAttempts: integer("scan_attempts").notNull().default(0),
+    viewCount: integer("view_count").notNull().default(0),
+    favoriteCount: integer("favorite_count").notNull().default(0),
+    uploaderUserId: uuid("uploader_user_id").references(() => users.id, { onDelete: "set null" }),
     scanError: text("scan_error"),
     discoverySource: text("discovery_source").notNull().default("manual"), // keyword_search|url_submit|creator_scan|manual
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -324,7 +327,74 @@ export const activityLog = pgTable(
   (t) => [index("activity_created_idx").on(t.createdAt)],
 );
 
+
+/* ------------------------------------------------ social: TikTok-style account */
+export const userFollows = pgTable(
+  "user_follows",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    followerId: uuid("follower_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    followingId: uuid("following_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("user_follows_uq").on(t.followerId, t.followingId),
+    index("user_follows_following_idx").on(t.followingId),
+  ],
+);
+
+export const presetFavorites = pgTable(
+  "preset_favorites",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    presetId: uuid("preset_id").notNull().references(() => presets.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("preset_favorites_uq").on(t.userId, t.presetId),
+    index("preset_favorites_user_idx").on(t.userId),
+  ],
+);
+
+export const presetViews = pgTable(
+  "preset_views",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    presetId: uuid("preset_id").notNull().references(() => presets.id, { onDelete: "cascade" }),
+    viewerId: uuid("viewer_id").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("preset_views_preset_idx").on(t.presetId)],
+);
+
+export const userUploads = pgTable(
+  "user_uploads",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    presetId: uuid("preset_id").references(() => presets.id, { onDelete: "set null" }),
+    title: text("title").notNull(),
+    caption: text("caption"),
+    videoUrl: text("video_url").notNull(),
+    thumbnailUrl: text("thumbnail_url"),
+    xmlUrl: text("xml_url"),
+    fiveMbUrl: text("five_mb_url"),
+    status: text("status").notNull().default("published"), // draft|published|removed
+    viewCount: integer("view_count").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("user_uploads_user_idx").on(t.userId),
+    index("user_uploads_created_idx").on(t.createdAt),
+  ],
+);
+
 export type User = typeof users.$inferSelect;
+export type UserFollow = typeof userFollows.$inferSelect;
+export type PresetFavorite = typeof presetFavorites.$inferSelect;
+export type UserUpload = typeof userUploads.$inferSelect;
 export type Preset = typeof presets.$inferSelect;
 export type PresetLink = typeof presetLinks.$inferSelect;
 export type Review = typeof reviews.$inferSelect;
