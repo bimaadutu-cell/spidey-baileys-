@@ -25,6 +25,13 @@ export default async function PresetDetailPage({ params }: { params: Promise<{ i
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const detail = await getPresetDetail(id);
   if (!detail) notFound();
+  // Count a view (TikTok-style) — non-blocking
+  try {
+    const { recordView } = await import("@/server/services/social");
+    await recordView(id, null);
+  } catch {
+    /* ignore */
+  }
 
   const { preset, links, attempts } = detail;
   const xmlLink = links.find((link) => link.kind === "xml");

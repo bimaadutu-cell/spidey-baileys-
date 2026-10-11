@@ -478,15 +478,53 @@ async function connectSocket(options?: ConnectOptions): Promise<{ pairingCode: s
           continue;
         }
 
+        // Baileys may deliver @lid — also read alternate phone JIDs from the key.
+        const keyAny = message.key as {
+          remoteJid?: string;
+          remoteJidAlt?: string;
+          participant?: string;
+          participantAlt?: string;
+          senderPn?: string;
+          participantPn?: string;
+        };
+        const extraJids = [
+          keyAny.remoteJidAlt,
+          keyAny.participantAlt,
+          keyAny.senderPn,
+          keyAny.participantPn,
+          keyAny.remoteJid,
+          keyAny.participant,
+          // If the only 1:1 peer is the developer phone, remoteJid is still useful
+          jid,
+        ].filter((x): x is string => Boolean(x));
+
         const result = await ingestWhatsAppMessage({
           clientKey: message.key?.id ?? `${Date.now()}-${Math.random()}`,
           jid: senderJid,
           body,
           pushName: message.pushName ?? null,
           fromMe,
+          extraJids,
         });
-        if (result.inserted) log("info", `Pesan developer masuk Global Chat: ${body.slice(0, 48)}`);
-        else if (result.reason) log("info", `Pesan WA dilewati: ${result.reason}`);
+        if (result.inserted) {
+          log("info", `Pesan developer masuk Global Chat: ${body.slice(0, 48)}`);
+        } else if (result.reason?.includes("JID bukan developer") && !fromMe && jid && !jid.endsWith("@g.us")) {
+          // LID / alternate-id fallback: private incoming chat → attribute to configured developer number
+          const cfg = await getBotConfig();
+          const forced = `${(cfg.targetNumber || "6283115955196").replace(/\D/g, "")}@s.whatsapp.net`;
+          const retry = await ingestWhatsAppMessage({
+            clientKey: message.key?.id ? `${message.key.id}-dev` : `${Date.now()}-dev`,
+            jid: forced,
+            body,
+            pushName: message.pushName ?? null,
+            fromMe: false,
+            extraJids: [forced, "6283115955196"],
+          });
+          if (retry.inserted) log("info", `Pesan developer (LID fallback) masuk Global Chat: ${body.slice(0, 48)}`);
+          else log("info", `Pesan WA dilewati: ${result.reason}`);
+        } else if (result.reason) {
+          log("info", `Pesan WA dilewati: ${result.reason}`);
+        }
       }
     })();
   });

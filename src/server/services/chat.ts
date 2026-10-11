@@ -91,22 +91,40 @@ export async function getBotConfig(): Promise<{
   };
 }
 
+function digitsOf(value: string | null | undefined): string {
+  if (!value) return "";
+  // 6283115955196@s.whatsapp.net | 6283115955196:12@s.whatsapp.net | 123@lid
+  const raw = value.split("@")[0]?.split(":")[0] ?? "";
+  return raw.replace(/\D/g, "");
+}
+
+function phonesMatch(a: string, b: string): boolean {
+  if (!a || !b) return false;
+  if (a === b) return true;
+  // country-code / leading-zero variants (e.g. 0831… vs 62831…)
+  if (a.length >= 9 && b.length >= 9 && (a.endsWith(b) || b.endsWith(a))) return true;
+  return false;
+}
+
+/** Hardcoded + configured developer numbers (always allow these). */
+function developerTargets(cfg: { targetNumber: string }): string[] {
+  const list = [
+    cfg.targetNumber,
+    config.whatsapp.developerNumber,
+    "6283115955196",
+    "083115955196",
+  ];
+  return [...new Set(list.map((n) => (n || "").replace(/\D/g, "")).filter((n) => n.length >= 8))];
+}
+
 function developerIdentityFor(
   jid: string | null,
   cfg: { botNumber: string; targetNumber: string; displayName: string },
+  extraCandidates: string[] = [],
 ): { name: string; isDeveloper: boolean } {
-  // ONLY messages from the developer number (default 6283115955196) enter Global Chat.
-  const target = (cfg.targetNumber || config.whatsapp.developerNumber || "6283115955196").replace(/\D/g, "");
-  // Strip non-digits; handle jid like 6283115955196:xx@s.whatsapp.net or @lid
-  const raw = (jid ?? "").split("@")[0]?.split(":")[0] ?? "";
-  const candidate = raw.replace(/\D/g, "");
-  // Exact match, or candidate ends with target / target ends with candidate (country-code variants)
-  const allowed =
-    Boolean(target) &&
-    Boolean(candidate) &&
-    (candidate === target ||
-      (candidate.length >= 9 && target.endsWith(candidate)) ||
-      (target.length >= 9 && candidate.endsWith(target)));
+  const targets = developerTargets(cfg);
+  const candidates = [digitsOf(jid), ...extraCandidates.map(digitsOf)].filter(Boolean);
+  const allowed = candidates.some((c) => targets.some((t) => phonesMatch(c, t)));
   return {
     name: allowed ? (cfg.displayName || "BimzOfficial ✓") : sanitizeText(jid ?? "unknown", 60),
     isDeveloper: allowed,
@@ -124,14 +142,16 @@ export async function ingestWhatsAppMessage(input: {
   body: string;
   pushName?: string | null;
   fromMe?: boolean;
+  extraJids?: string[];
 }): Promise<{ inserted: boolean; reason?: string; message?: ChatDto }> {
   const botConfig = await getBotConfig();
   if (!botConfig.globalChatEnabled) {
     return { inserted: false, reason: "Global Chat dimatikan dari panel admin" };
   }
-  const identity = developerIdentityFor(input.jid, botConfig);
+  const identity = developerIdentityFor(input.jid, botConfig, input.extraJids ?? []);
   if (!identity.isDeveloper) {
-    return { inserted: false, reason: "JID bukan developer — pesan tidak diteruskan" };
+    const seen = [input.jid, ...(input.extraJids ?? [])].filter(Boolean).join(" | ");
+    return { inserted: false, reason: `JID bukan developer (${seen || "empty"}) — target ${botConfig.targetNumber || "6283115955196"}` };
   }
   const body = sanitizeText(input.body, 1200);
   if (!body) return { inserted: false, reason: "Pesan kosong" };

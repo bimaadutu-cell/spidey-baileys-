@@ -230,6 +230,12 @@ export type ScanReport = {
   xmlStatus: string;
   fiveMbStatus: string;
   confidence: number;
+  viewCount: number | null;
+  favoriteCount: number | null;
+  discoverySource: string | null;
+  viewCount: number;
+  favoriteCount: number;
+  discoverySource: string;
   xmlUrl: string | null;
   fiveMbUrl: string | null;
   xmlSource: string | null;
@@ -326,6 +332,9 @@ async function loadStoredLinks(presetId: string): Promise<LinkCandidate[]> {
     url: row.url,
     kind: (row.kind === "xml" || row.kind === "five_mb" ? row.kind : "unknown") as LinkCandidate["kind"],
     confidence: row.confidence,
+    viewCount: row.viewCount ?? 0,
+    favoriteCount: row.favoriteCount ?? 0,
+    discoverySource: row.discoverySource ?? "manual",
     hostLabel: row.hostLabel ?? "unknown",
     sourceType: (row.sourceType as LinkCandidate["sourceType"]) ?? "related_search",
     sourceRef: row.sourceRef ?? "tersimpan dari scan sebelumnya",
@@ -891,6 +900,8 @@ export async function runRetryQueue(limit = 5): Promise<{ retried: number; resul
         inArray(presets.overallStatus, ["NEW", "RETRY_PENDING", "PARTIAL", "SOURCE_UNAVAILABLE"]),
         or(sql`${presets.nextRetryAt} is null`, sql`${presets.nextRetryAt} <= now()`),
         sql`${presets.scanAttempts} < ${config.scan.maxPresetAttempts}`,
+        // Never re-scan user uploads — links were configured at upload time
+        sql`${presets.discoverySource} is distinct from 'user_upload'`,
       ),
     )
     .orderBy(asc(presets.lastScannedAt))
@@ -960,6 +971,9 @@ const baseSelect = {
   fiveMbStatus: presets.fiveMbStatus,
   overallStatus: presets.overallStatus,
   confidence: presets.confidence,
+  viewCount: presets.viewCount,
+  favoriteCount: presets.favoriteCount,
+  discoverySource: presets.discoverySource,
   xmlUrl: presets.xmlUrl,
   fiveMbUrl: presets.fiveMbUrl,
   stats: presets.stats,

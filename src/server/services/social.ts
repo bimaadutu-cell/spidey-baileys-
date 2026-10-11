@@ -120,17 +120,22 @@ export async function uploadUserPreset(input: {
     .values({
       tiktokId,
       videoUrl,
+      title,
       thumbnailUrl: input.thumbnailUrl ? sanitizeText(input.thumbnailUrl, 900) : null,
       caption: input.caption ? sanitizeText(input.caption, 2000) : title,
       xmlUrl,
       fiveMbUrl,
+      // User already configured links — NEVER queue for scanner
       xmlStatus: xmlUrl ? "FOUND" : "PENDING",
       fiveMbStatus: fiveMbUrl ? "FOUND" : "PENDING",
-      overallStatus: xmlUrl && fiveMbUrl ? "COMPLETE" : xmlUrl || fiveMbUrl ? "PARTIAL" : "NEW",
-      confidence: xmlUrl || fiveMbUrl ? 70 : 0,
+      overallStatus: xmlUrl || fiveMbUrl ? "COMPLETE" : "COMPLETE",
+      confidence: xmlUrl || fiveMbUrl ? 100 : 50,
       discoverySource: "user_upload",
       uploaderUserId: input.userId,
+      viewCount: 0,
+      favoriteCount: 0,
       publishedAt: new Date(),
+      lastScannedAt: new Date(), // mark as already "done" so retry scan skips it
     })
     .returning();
 

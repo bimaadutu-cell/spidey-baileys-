@@ -31,6 +31,8 @@ export type PresetItem = {
   xmlUrl: string | null;
   fiveMbUrl: string | null;
   likes: number | null;
+  viewCount?: number | null;
+  favoriteCount?: number | null;
   comments: number | null;
   publishedAt: string | null;
   lastScannedAt: string | null;
@@ -170,6 +172,10 @@ export function PresetCard({ preset, compact = false }: { preset: PresetItem; co
             {preset.playableUrl ? <span className="chip">Video siap</span> : <span className="chip">Embed TikTok</span>}
           </div>
           <div className="flex gap-2">
+            <p className="mt-1 text-[11px] text-slate-400">
+              👁 {formatCount(preset.viewCount ?? 0)} tontonan
+              {(preset.favoriteCount ?? 0) > 0 ? ` · ♥ ${formatCount(preset.favoriteCount ?? 0)}` : ""}
+            </p>
             {preset.xmlUrl ? (
               <a href={preset.xmlUrl} target="_blank" rel="noopener noreferrer nofollow" className="btn btn-primary flex-1 !py-1.5 !text-[11px]">
                 XML
