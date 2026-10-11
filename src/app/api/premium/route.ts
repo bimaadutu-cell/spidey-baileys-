@@ -14,6 +14,7 @@ import {
 } from "@/server/services/premium-alight";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 export const maxDuration = 60;
 
 /** GET — unlock progress + activation state + live upstream status. */

@@ -80,12 +80,28 @@ export function BotConfigPanel({
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ action, phone: botNumber || undefined }),
         });
-        const data = (await res.json()) as { ok: boolean; message?: string; worker?: WorkerSnapshot };
-        setPairMsg(data.message ?? (data.ok ? "ok" : "gagal"));
+        const raw = await res.text();
+        let data: { ok?: boolean; message?: string; error?: string; worker?: WorkerSnapshot; status?: string } = {};
+        try {
+          data = JSON.parse(raw) as typeof data;
+        } catch {
+          setPairMsg(
+            res.status === 504 || res.status === 502
+              ? "Timeout server (Vercel). Bot WhatsApp tidak bisa jalan di Vercel serverless — pakai worker VPS/Railway."
+              : `Respons server tidak valid (HTTP ${res.status}).`,
+          );
+          return;
+        }
+        setPairMsg(data.message ?? data.error ?? (data.ok ? "ok" : "gagal"));
         if (data.worker) setWorker(data.worker);
         onReload();
-      } catch {
-        setPairMsg("Koneksi gagal");
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "unknown";
+        setPairMsg(
+          /failed to fetch|network|abort/i.test(msg)
+            ? "Koneksi ke server gagal / timeout. Di Vercel, bot WhatsApp harus dijalankan lewat worker eksternal (VPS)."
+            : `Koneksi gagal: ${msg}`,
+        );
       } finally {
         setPairing(false);
       }
@@ -313,8 +329,13 @@ export function BotConfigPanel({
         ) : null}
 
         <div className="mt-3 flex flex-wrap gap-2">
-          <button onClick={() => void botAction("pair")} disabled={pairing} className="btn btn-primary !text-xs">
-            {pairing ? "Meminta…" : "Minta pairing code"}
+          <button
+            onClick={() => void botAction("pair")}
+            disabled={pairing || worker?.supported === false}
+            className="btn btn-primary !text-xs"
+            title={worker?.supported === false ? worker.environmentNote : undefined}
+          >
+            {pairing ? "Meminta…" : worker?.supported === false ? "Tidak tersedia di Vercel" : "Minta pairing code"}
           </button>
           <button onClick={() => void botAction("pump")} className="btn !text-xs">Proses antrean ulasan</button>
           <button onClick={() => void botAction("stop")} className="btn !text-xs">Hentikan</button>

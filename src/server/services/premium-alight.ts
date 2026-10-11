@@ -36,16 +36,26 @@ export type AmResult = {
   timedOut?: boolean;
 };
 
-async function callAm(params: Record<string, string>): Promise<AmResult> {
-  if (!AM_KEY) {
-    return { ok: false, status: 0, message: "BIMZ_API_KEY belum diset di server", data: null };
-  }
-  const query = new URLSearchParams({ apikey: AM_KEY, ...params });
+function amKeys(): string[] {
+  const keys = [
+    AM_KEY,
+    (process.env.BIMZ_API_KEY_BACKUP ?? "").trim(),
+    ...(process.env.BIMZ_API_KEYS_EXTRA ?? "")
+      .split(",")
+      .map((k) => k.trim())
+      .filter(Boolean),
+  ].filter((k, i, all) => k.length > 0 && all.indexOf(k) === i);
+  return keys;
+}
+
+async function callAmOnce(apikey: string, params: Record<string, string>): Promise<AmResult> {
+  const query = new URLSearchParams({ apikey, ...params });
   try {
     const res = await fetch(`${AM_URL}?${query.toString()}`, {
       cache: "no-store",
       headers: { accept: "application/json" },
-      signal: AbortSignal.timeout(110_000),
+      // Vercel hobby/pro hard-kills at 60s — stay under that so the client gets a real JSON body.
+      signal: AbortSignal.timeout(50_000),
     });
     const text = await res.text();
     let payload: unknown = null;
@@ -72,19 +82,32 @@ async function callAm(params: Record<string, string>): Promise<AmResult> {
     };
   } catch (error) {
     const raw = error instanceof Error ? error.message : String(error);
-    // A timeout/abort does NOT mean the email failed — Firebase often sends it
-    // while the HTTP call is still open. Report that honestly.
     const aborted = /abort|timeout|terminated|socket/i.test(raw);
     return {
       ok: false,
       status: 0,
       timedOut: aborted,
       message: aborted
-        ? "Permintaan ke /api/am melebihi batas waktu. Email magic link kemungkinan tetap terkirim — cek inbox/spam, lalu lanjut ke Langkah 2."
+        ? "Permintaan ke RestAPI Bimz melebihi batas waktu server (Vercel ~50s). Email magic link sering tetap terkirim — cek inbox/spam, lalu lanjut ke Langkah 2."
         : raw.slice(0, 200),
       data: null,
     };
   }
+}
+
+async function callAm(params: Record<string, string>): Promise<AmResult> {
+  const keys = amKeys();
+  if (keys.length === 0) {
+    return { ok: false, status: 0, message: "BIMZ_API_KEY belum diset di server", data: null };
+  }
+  let last: AmResult = { ok: false, status: 0, message: "Tidak ada API key", data: null };
+  for (const key of keys) {
+    last = await callAmOnce(key, params);
+    if (last.ok) return last;
+    // Retry next key only on auth failures.
+    if (!/api.?key|unauthor|forbidden|401|403/i.test(last.message)) return last;
+  }
+  return last;
 }
 
 /* --------------------------------------------------------- review gating */

@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  output: "standalone",
   // Vercel: allow TikTok/Bimz media through the edge instead of being blocked
   // by hot-link protection.
   images: {

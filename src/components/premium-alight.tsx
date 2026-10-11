@@ -67,15 +67,27 @@ export function PremiumAlight() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       });
-      const payload = (await res.json()) as {
-        ok: boolean;
+      const raw = await res.text();
+      let payload: {
+        ok?: boolean;
         message?: string;
         error?: string;
         idToken?: string | null;
-      };
+      } = {};
+      try {
+        payload = JSON.parse(raw) as typeof payload;
+      } catch {
+        setMsg({
+          kind: "err",
+          text:
+            res.status === 504 || res.status === 502
+              ? "Timeout server (Vercel). Coba lagi — jika langkah 1, cek inbox email karena magic link sering tetap terkirim."
+              : `Server error HTTP ${res.status}. Coba refresh lalu ulangi.`,
+        });
+        return;
+      }
       setMsg({ kind: payload.ok ? "ok" : "err", text: payload.message ?? payload.error ?? "Selesai" });
       if (payload.idToken) {
-        // idToken is filled into step 3 automatically after verification.
         setIdToken(payload.idToken);
         setMsg({
           kind: "ok",
@@ -83,8 +95,14 @@ export function PremiumAlight() {
         });
       }
       await load();
-    } catch {
-      setMsg({ kind: "err", text: "Koneksi gagal." });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "unknown";
+      setMsg({
+        kind: "err",
+        text: /failed to fetch|network|abort/i.test(msg)
+          ? "Koneksi gagal / timeout. Untuk langkah Kirim email: cek inbox & spam — link sering tetap masuk meski timeout."
+          : `Koneksi gagal: ${msg}`,
+      });
     } finally {
       setBusy(null);
     }

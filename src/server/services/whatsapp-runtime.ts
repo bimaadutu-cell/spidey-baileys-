@@ -77,12 +77,21 @@ function log(level: "info" | "warn" | "error", message: string): void {
 }
 
 export function environmentSupportsWorker(): { supported: boolean; reason: string } {
-  // Vercel serverless/edge cannot hold a socket open between invocations.
-  if (process.env.VERCEL === "1" && process.env.VERCEL_ENV !== "development") {
+  // Any serverless platform kills the process between requests — Baileys needs a
+  // long-lived TCP socket, so pairing/connection can never work here.
+  const onVercel = process.env.VERCEL === "1" || process.env.VERCEL === "true";
+  const onAwsLambda = Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.LAMBDA_TASK_ROOT);
+  const onNetlify = Boolean(process.env.NETLIFY);
+  const onCloudflare = Boolean(process.env.CF_PAGES || process.env.CLOUDFLARE_WORKERS);
+  const forced = (process.env.WA_FORCE_INPROCESS ?? "").toLowerCase() === "true";
+
+  if (!forced && (onVercel || onAwsLambda || onNetlify || onCloudflare)) {
+    const where = onVercel ? "Vercel" : onAwsLambda ? "AWS Lambda" : onNetlify ? "Netlify" : "Cloudflare";
     return {
       supported: false,
       reason:
-        "Vercel Functions bersifat serverless — koneksi WhatsApp tidak bisa hidup terus. Jalankan worker di host persisten (VPS/Railway/Render/Fly) dan arahkan APP_URL + INTERNAL_TOKEN ke situs ini.",
+        `${where} bersifat serverless — bot WhatsApp TIDAK BISA pairing/terhubung di sini. ` +
+        `Deploy worker Baileys di host persisten (VPS Ubuntu / Railway / Render / Fly), set APP_URL=https://situs-kamu + INTERNAL_TOKEN yang sama, lalu jalankan: pm2 start ecosystem.config.cjs`,
     };
   }
   return { supported: true, reason: "Proses Node persisten terdeteksi — worker dapat berjalan di dalam website." };
@@ -160,7 +169,11 @@ function identityLabel(cfg: { platform: string; browser: string }): string {
 }
 
 function sessionDir(): string {
-  const dir = process.env.WA_SESSION_DIR ?? path.join(process.cwd(), ".spaceprs-session");
+  // turbopackIgnore: process.cwd() is runtime-only (session on disk), not a static asset path.
+  const base = process.env.WA_SESSION_DIR?.trim()
+    ? process.env.WA_SESSION_DIR.trim()
+    : path.join(/* turbopackIgnore: true */ process.cwd(), ".spaceprs-session");
+  const dir = base;
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   return dir;
 }
