@@ -77,6 +77,11 @@ export function AdminDashboard() {
   const [keyword, setKeyword] = useState("preset alight motion");
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [terminalLogs, setTerminalLogs] = useState<string[]>([]);
+  const [archived, setArchived] = useState<
+    { id: string; tiktokId: string; title: string | null; thumbnailUrl: string | null; overallStatus: string }[]
+  >([]);
+  const [videoCache, setVideoCache] = useState<{ count: number; totalMb: number } | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -108,11 +113,62 @@ export function AdminDashboard() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       });
-      const payload = (await res.json()) as { ok?: boolean; error?: string; message?: string; retried?: number };
+      const payload = (await res.json()) as {
+        ok?: boolean;
+        error?: string;
+        message?: string;
+        retried?: number;
+        logs?: string[];
+        videoCache?: { count: number; totalMb: number };
+      };
+      if (payload.logs?.length) setTerminalLogs(payload.logs);
+      if (payload.videoCache) setVideoCache(payload.videoCache);
       setNotice(payload.ok ? payload.message ?? `${label} selesai` : payload.error ?? `${label} gagal`);
       await load();
     } catch {
       setNotice(`${label} gagal (koneksi)`);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const runDailyScan300 = async () => {
+    setBusy("Scan harian 300");
+    setNotice(null);
+    setTerminalLogs([`[${new Date().toLocaleTimeString("id-ID")}] ▶ Menyiapkan scan 300 preset…`]);
+    try {
+      const res = await fetch("/api/admin", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "scan_daily_300" }),
+      });
+      const payload = (await res.json()) as {
+        ok?: boolean;
+        error?: string;
+        message?: string;
+        logs?: string[];
+        videoCache?: { count: number; totalMb: number };
+      };
+      setTerminalLogs(payload.logs ?? [`Error: ${payload.error ?? "gagal"}`]);
+      if (payload.videoCache) setVideoCache(payload.videoCache);
+      setNotice(payload.ok ? payload.message ?? "Selesai" : payload.error ?? "Gagal");
+      // load archived videos for terminal panel
+      const arch = await fetch("/api/admin", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "list_archived" }),
+      });
+      const archJson = (await arch.json()) as {
+        ok?: boolean;
+        items?: typeof archived;
+        videoCache?: { count: number; totalMb: number };
+      };
+      if (archJson.items) setArchived(archJson.items);
+      if (archJson.videoCache) setVideoCache(archJson.videoCache);
+      await load();
+    } catch {
+      setTerminalLogs((prev) => [...prev, "✗ Koneksi gagal / timeout — coba lagi atau kurangi batch"]);
+      setNotice("Scan 300 gagal (koneksi/timeout)");
     } finally {
       setBusy(null);
     }
@@ -221,17 +277,24 @@ export function AdminDashboard() {
           </button>
           <button
             disabled={busy !== null}
-            onClick={() => void runAction("/api/admin", { action: "bulk_harvest", maxQueries: 40 }, "Bulk harvest")}
+            onClick={() => void runAction("/api/admin", { action: "bulk_harvest", maxQueries: 300 }, "Bulk harvest 300")}
             className="btn !text-xs"
           >
-            {busy === "Bulk harvest" ? "Memanen…" : "Ambil semua preset (bulk harvest)"}
+            {busy === "Bulk harvest 300" ? "Memanen 300…" : "Scan harian 300 preset (Bimz)"}
           </button>
           <button
             disabled={busy !== null}
-            onClick={() => void runAction("/api/admin", { action: "deep_scan", limit: 10 }, "Deep scan")}
+            onClick={() => void runAction("/api/admin", { action: "sync_upstream", maxQueries: 300 }, "Sync upstream 300")}
+            className="btn !text-xs"
+          >
+            {busy === "Sync upstream 300" ? "Sync…" : "Sync upstream 300 preset"}
+          </button>
+          <button
+            disabled={busy !== null}
+            onClick={() => void runAction("/api/admin", { action: "deep_scan", limit: 50 }, "Deep scan")}
             className="btn btn-primary !text-xs"
           >
-            {busy === "Deep scan" ? "Memindai XML…" : "Deep scan preset (RestAPI Bimz)"}
+            {busy === "Deep scan" ? "Memindai XML…" : "Deep scan 50 preset (XML + 5MB)"}
           </button>
           <button
             disabled={busy !== null}
@@ -253,6 +316,88 @@ export function AdminDashboard() {
           </button>
         </div>
         {notice ? <p className="mt-3 text-xs text-slate-300">{notice}</p> : null}
+      </section>
+
+
+      <section className="card-3d rounded-3xl p-5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-bold uppercase tracking-[0.18em] text-slate-400">Terminal scan 300</h2>
+          <div className="flex flex-wrap gap-2">
+            <button
+              disabled={busy !== null}
+              onClick={() => void runDailyScan300()}
+              className="btn btn-primary !text-xs"
+            >
+              {busy === "Scan harian 300" ? "Scanning…" : "▶ Jalankan scan 300 + arsip video"}
+            </button>
+            <button
+              disabled={busy !== null}
+              onClick={() =>
+                void runAction("/api/admin", { action: "list_archived" }, "List archived").then(async () => {
+                  const arch = await fetch("/api/admin", {
+                    method: "POST",
+                    headers: { "content-type": "application/json" },
+                    body: JSON.stringify({ action: "list_archived" }),
+                  });
+                  const archJson = (await arch.json()) as {
+                    items?: typeof archived;
+                    videoCache?: { count: number; totalMb: number };
+                  };
+                  if (archJson.items) setArchived(archJson.items);
+                  if (archJson.videoCache) setVideoCache(archJson.videoCache);
+                })
+              }
+              className="btn !text-xs"
+            >
+              Muat video tersimpan
+            </button>
+          </div>
+        </div>
+        {videoCache ? (
+          <p className="mt-2 text-[11px] text-emerald-300">
+            💾 {videoCache.count} video permanen di database · {videoCache.totalMb} MB
+          </p>
+        ) : null}
+        <div className="mt-3 max-h-64 overflow-auto rounded-xl border border-white/10 bg-black/80 p-3 font-mono text-[11px] leading-relaxed text-emerald-300/90">
+          {terminalLogs.length === 0 ? (
+            <p className="text-slate-500">$ menunggu perintah scan…</p>
+          ) : (
+            terminalLogs.map((line, i) => (
+              <div key={`${i}-${line.slice(0, 12)}`}>{line}</div>
+            ))
+          )}
+        </div>
+        {archived.length > 0 ? (
+          <div className="mt-4">
+            <p className="mb-2 text-[11px] uppercase tracking-[0.16em] text-slate-500">
+              Video preset tersimpan permanen ({archived.length})
+            </p>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 md:grid-cols-6">
+              {archived.map((item) => (
+                <a
+                  key={item.id}
+                  href={`/preset/${item.id}`}
+                  className="overflow-hidden rounded-xl border border-white/10 bg-black/40"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={item.thumbnailUrl || `/api/media/video/${item.id}`}
+                    alt={item.title || item.tiktokId}
+                    className="aspect-[9/12] w-full object-cover"
+                  />
+                  <p className="truncate px-1.5 py-1 text-[10px] text-slate-300">{item.title || item.tiktokId}</p>
+                  <video
+                    src={`/api/media/video/${item.id}`}
+                    muted
+                    playsInline
+                    preload="none"
+                    className="hidden"
+                  />
+                </a>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </section>
 
       <section className="card-3d rounded-3xl p-5">

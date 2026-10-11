@@ -1,8 +1,8 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
-import { desc, sql } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { activityLog, scanAttempts, scanJobs } from "@/db/schema";
+import { activityLog, presets, scanAttempts, scanJobs, videoAssets } from "@/db/schema";
 import { getCurrentUser, isAdmin } from "@/server/auth";
 import { fail, json, readJson } from "@/server/http";
 import { platformStats } from "@/server/services/preset-store";
@@ -88,12 +88,12 @@ export async function GET() {
 }
 
 const actionSchema = z.object({
-  action: z.enum(["retry_scan", "retry_delivery", "keyword_scan", "save_bot_config", "bulk_harvest", "sync_upstream", "ingest_url", "deep_scan", "backfill", "clear_global_chat", "delete_review"]),
+  action: z.enum(["retry_scan", "retry_delivery", "keyword_scan", "save_bot_config", "bulk_harvest", "sync_upstream", "ingest_url", "deep_scan", "backfill", "clear_global_chat", "delete_review", "scan_daily_300", "list_archived"]),
   id: z.string().uuid().optional(),
   keyword: z.string().min(2).max(120).optional(),
-  limit: z.number().int().min(1).max(25).optional(),
+  limit: z.number().int().min(1).max(100).optional(),
   url: z.string().min(10).max(400).optional(),
-  maxQueries: z.number().int().min(1).max(80).optional(),
+  maxQueries: z.number().int().min(1).max(300).optional(),
   botConfig: z
     .object({
       botNumber: z.string().min(8).max(20).regex(/^\d+$/, "Nomor bot hanya angka"),
@@ -157,12 +157,12 @@ export async function POST(req: NextRequest) {
   if (parsed.data.action === "bulk_harvest" || parsed.data.action === "sync_upstream") {
     const report =
       parsed.data.action === "sync_upstream"
-        ? await syncAllFromUpstream({ maxQueries: parsed.data.maxQueries ?? 200, perQuery: 80 })
-        : await runBulkHarvest({ maxQueries: parsed.data.maxQueries ?? 80, perQuery: 60 });
+        ? await syncAllFromUpstream({ maxQueries: parsed.data.maxQueries ?? 300, perQuery: 100 })
+        : await runBulkHarvest({ maxQueries: parsed.data.maxQueries ?? 300, perQuery: 100 });
     await db.insert(activityLog).values({
       actor,
       action: parsed.data.action,
-      detail: `${report.totalIngested} preset baru dari ${report.queriesRun} query (sumber: 3000-iptlrbb0xhnl0yfm0kz1x.e2b.app)`,
+      detail: `${report.totalIngested} preset baru dari ${report.queriesRun} query (target harian ~300, sumber upstream Bimz)`,
     });
     return json({
       ok: true,
@@ -186,7 +186,7 @@ export async function POST(req: NextRequest) {
   }
 
   if (parsed.data.action === "deep_scan") {
-    const report = await runDeepScanBatch(parsed.data.limit ?? 8);
+    const report = await runDeepScanBatch(parsed.data.limit ?? 40);
     await db.insert(activityLog).values({
       actor,
       action: "deep_scan",
@@ -208,6 +208,68 @@ export async function POST(req: NextRequest) {
       presetId: result.preset?.id ?? null,
       error: result.ok ? undefined : result.message,
     });
+  }
+
+
+  if (parsed.data.action === "scan_daily_300") {
+    const logs: string[] = [];
+    const push = (line: string) => logs.push(`[${new Date().toLocaleTimeString("id-ID")}] ${line}`);
+    push("▶ Memulai scan harian target 300 preset (Bimz upstream)…");
+    let harvest: Awaited<ReturnType<typeof syncAllFromUpstream>> | null = null;
+    try {
+      harvest = await syncAllFromUpstream({ maxQueries: 300, perQuery: 100 });
+      push(`✓ Harvest selesai: ${harvest.totalIngested} baru · ${harvest.queriesRun} query · ${harvest.totalFound} ditemukan`);
+    } catch (error) {
+      push(`⚠ Sync upstream gagal, fallback bulk harvest: ${error instanceof Error ? error.message : "error"}`);
+      harvest = await runBulkHarvest({ maxQueries: 300, perQuery: 100 });
+      push(`✓ Bulk harvest: ${harvest.totalIngested} baru · ${harvest.queriesRun} query`);
+    }
+    push("▶ Deep scan + arsip video permanen ke database…");
+    const deep = await runDeepScanBatch(60);
+    push(
+      `✓ Deep scan: ${deep.scanned} dipindai · XML ${deep.withXml} · 5MB ${deep.withPackage} · gagal ${deep.failed} · ${deep.durationMs}ms`,
+    );
+    for (const d of deep.details.slice(0, 40)) {
+      push(`  · ${d.tiktokId} → ${d.status} ${d.message.slice(0, 80)}`);
+    }
+    const { videoCacheStats } = await import("@/server/services/video-store");
+    const cache = await videoCacheStats();
+    push(`💾 Video permanen di DB: ${cache.count} file · ${cache.totalMb} MB`);
+    push("■ Selesai");
+    await db.insert(activityLog).values({
+      actor,
+      action: "scan_daily_300",
+      detail: `ingested ${harvest?.totalIngested ?? 0}, scanned ${deep.scanned}, archived videos ${cache.count}`,
+    });
+    return json({
+      ok: true,
+      message: `Scan 300 selesai — ${harvest?.totalIngested ?? 0} baru, ${deep.scanned} di-scan, ${cache.count} video di DB`,
+      logs,
+      harvest,
+      deep,
+      videoCache: cache,
+    });
+  }
+
+  if (parsed.data.action === "list_archived") {
+    const rows = await db
+      .select({
+        id: presets.id,
+        tiktokId: presets.tiktokId,
+        title: presets.title,
+        thumbnailUrl: presets.thumbnailUrl,
+        xmlUrl: presets.xmlUrl,
+        fiveMbUrl: presets.fiveMbUrl,
+        overallStatus: presets.overallStatus,
+        viewCount: presets.viewCount,
+      })
+      .from(presets)
+      .innerJoin(videoAssets, eq(videoAssets.presetId, presets.id))
+      .orderBy(desc(presets.updatedAt))
+      .limit(48);
+    const { videoCacheStats } = await import("@/server/services/video-store");
+    const cache = await videoCacheStats();
+    return json({ ok: true, items: rows, videoCache: cache });
   }
 
   if (parsed.data.action === "clear_global_chat") {

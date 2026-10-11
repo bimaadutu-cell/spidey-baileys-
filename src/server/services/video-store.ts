@@ -13,7 +13,7 @@ import { isDirectCdnUrl } from "./media-proxy";
  * Served back by /api/media/video/<id> with full Range support.
  * =======================================================================*/
 
-const MAX_BYTES = Number(process.env.VIDEO_CACHE_MAX_BYTES ?? 12_000_000); // 12 MB
+const MAX_BYTES = Number(process.env.VIDEO_CACHE_MAX_BYTES ?? 25_000_000); // 25 MB permanent cache
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
 
@@ -54,7 +54,12 @@ export async function storeVideo(
   tiktokId: string,
   cdnUrl: string,
 ): Promise<{ stored: boolean; reason: string; sizeBytes?: number }> {
-  if (!isDirectCdnUrl(cdnUrl)) return { stored: false, reason: "URL bukan CDN langsung" };
+  const looksVideo =
+    isDirectCdnUrl(cdnUrl) ||
+    /\.(mp4|webm|mov)(\?|$)/i.test(cdnUrl) ||
+    /\/api\/media/i.test(cdnUrl) ||
+    /tiktokcdn|byteoversea|ibyteimg|tikwm/i.test(cdnUrl);
+  if (!looksVideo) return { stored: false, reason: "URL bukan sumber video" };
   if (inflight.has(presetId)) return { stored: false, reason: "unduhan sedang berjalan" };
   if (await hasStoredVideo(presetId)) return { stored: false, reason: "sudah tersimpan" };
 

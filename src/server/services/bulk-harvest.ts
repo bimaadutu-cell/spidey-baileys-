@@ -180,7 +180,7 @@ export async function runDeepScanBatch(limit = 8, jobId?: string): Promise<DeepS
       sql`${presets.overallStatus} <> 'COMPLETE' and ${presets.scanAttempts} < 6`,
     )
     .orderBy(sql`${presets.scanAttempts} asc, ${presets.lastScannedAt} asc nulls first`)
-    .limit(Math.min(Math.max(limit, 1), 25));
+    .limit(Math.min(Math.max(limit, 1), 100));
 
   const report: DeepScanBatchReport = {
     scanned: 0,
@@ -204,6 +204,27 @@ export async function runDeepScanBatch(limit = 8, jobId?: string): Promise<DeepS
     try {
       const result = await scanPreset(row.id, jobId);
       report.scanned += 1;
+
+      // Permanent video archive in PostgreSQL (survives TikTok CDN expiry)
+      try {
+        const { resolvePlayableUrl } = await import("./media-proxy");
+        const { storeVideo } = await import("./video-store");
+        const media = await resolvePlayableUrl(row.id);
+        if (media.url) {
+          const stored = await storeVideo(row.id, row.tiktokId, media.url);
+          if (stored.stored) {
+            report.details.push({
+              tiktokId: row.tiktokId,
+              status: "ARCHIVED",
+              xml: result.xmlUrl ? 1 : 0,
+              packages: result.fiveMbUrl ? 1 : 0,
+              message: `Video tersimpan permanen (${stored.sizeBytes ?? 0} bytes)`,
+            });
+          }
+        }
+      } catch {
+        /* archive is best-effort */
+      }
 
       const deepMsg = result.stages.find((stage) => stage.stage === "bimz_deep_scan")?.message ?? "";
       if (/kuota|limit/i.test(deepMsg)) {
@@ -335,7 +356,7 @@ export async function syncAllFromUpstream(options: {
   jobId?: string;
 } = {}): Promise<HarvestReport> {
   return runBulkHarvest({
-    maxQueries: options.maxQueries ?? 200,
+    maxQueries: options.maxQueries ?? 300,
     perQuery: options.perQuery ?? 80,
     includeCreators: true,
     jobId: options.jobId,

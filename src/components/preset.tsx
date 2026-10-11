@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { useLocalFavorites } from "./hooks";
 
 export type PresetItem = {
@@ -90,24 +90,43 @@ function formatCount(value: number | null): string {
 export function PresetCard({ preset, compact = false }: { preset: PresetItem; compact?: boolean }) {
   const { favorites, toggle } = useLocalFavorites();
   const [mediaFailed, setMediaFailed] = useState(false);
+  const [playing, setPlaying] = useState(false);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   const isFavorite = favorites.includes(preset.id);
+
+  const stream = preset.streamUrl ?? `/api/media/video/${preset.id}`;
+
+  const togglePlay = (event: MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const el = videoRef.current;
+    if (!el) return;
+    if (el.paused) {
+      void el.play().then(() => setPlaying(true)).catch(() => setMediaFailed(true));
+    } else {
+      el.pause();
+      setPlaying(false);
+    }
+  };
 
   return (
     <article className="card-3d card-3d-hover group relative overflow-hidden rounded-[22px]">
-      <Link href={`/preset/${preset.id}`} className="block">
+      <div className="block">
         <div className="relative aspect-[9/13] w-full overflow-hidden bg-gradient-to-br from-white/8 via-white/3 to-black">
           {!mediaFailed ? (
             <video
-              src={preset.streamUrl ?? `/api/media/video/${preset.id}`}
+              ref={videoRef}
+              src={stream}
               poster={preset.thumbProxyUrl ?? preset.thumbnailUrl ?? undefined}
               muted
               loop
               playsInline
-              preload="none"
-              className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
+              preload="metadata"
+              className="h-full w-full object-cover"
               onError={() => setMediaFailed(true)}
-              onMouseEnter={(event) => void event.currentTarget.play().catch(() => undefined)}
-              onMouseLeave={(event) => event.currentTarget.pause()}
+              onPlay={() => setPlaying(true)}
+              onPause={() => setPlaying(false)}
+              onClick={togglePlay}
             />
           ) : preset.thumbProxyUrl || preset.thumbnailUrl ? (
             /* eslint-disable-next-line @next/next/no-img-element */
@@ -115,11 +134,30 @@ export function PresetCard({ preset, compact = false }: { preset: PresetItem; co
               src={preset.thumbProxyUrl ?? preset.thumbnailUrl ?? ""}
               alt={preset.title ?? "Preset TikTok"}
               loading="lazy"
-              className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
+              className="h-full w-full object-cover"
             />
           ) : (
             <div className="flex h-full w-full items-center justify-center text-3xl text-white/25">预设</div>
           )}
+
+          {/* Play / Pause control */}
+          {!mediaFailed ? (
+            <button
+              type="button"
+              aria-label={playing ? "Pause" : "Play"}
+              onClick={togglePlay}
+              className="absolute left-1/2 top-1/2 z-10 grid h-14 w-14 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border border-white/30 bg-black/55 text-xl text-white shadow-lg backdrop-blur-sm transition hover:scale-105"
+              style={{ opacity: playing ? 0 : 1 }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.opacity = "1";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.opacity = playing ? "0" : "1";
+              }}
+            >
+              {playing ? "❚❚" : "▶"}
+            </button>
+          ) : null}
 
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-transparent" />
 
@@ -162,7 +200,8 @@ export function PresetCard({ preset, compact = false }: { preset: PresetItem; co
             </p>
           </div>
         </div>
-      </Link>
+        <Link href={`/preset/${preset.id}`} className="absolute inset-x-0 bottom-0 top-[55%] z-[1]" aria-label="Detail preset" />
+      </div>
 
       {!compact ? (
         <div className="space-y-2 px-3.5 pb-3.5 pt-3">
