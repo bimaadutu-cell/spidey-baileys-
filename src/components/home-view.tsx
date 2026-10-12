@@ -5,7 +5,6 @@ import { useMemo, useState } from "react";
 import { PresetGrid, PresetSkeletonGrid, type PresetItem } from "./preset";
 import { ReviewForm } from "./forms";
 import { usePagedQuery, useDebounced, useLocalFavorites, useSession, useActiveScans } from "./hooks";
-import { LiveWallpaper } from "./live-wallpaper";
 
 export type CategoryDto = { slug: string; label: string; labelCn: string | null; count: number };
 
@@ -141,7 +140,6 @@ export function HomeView({ initialQuery, favoritesOnly }: { initialQuery: string
 
   return (
     <div className="space-y-10">
-      <LiveWallpaper />
       {/* ------------------------------------------- premium calling banner */}
       <Link
         href="/premium-alight"
@@ -167,7 +165,7 @@ export function HomeView({ initialQuery, favoritesOnly }: { initialQuery: string
 
       {/* ---------------------------------------------------------- hero */}
       <section className="card-3d relative overflow-hidden rounded-[30px] p-6 sm:p-10">
-        <div className="pointer-events-none absolute -right-16 -top-20 h-48 w-48 rounded-full bg-white/8" />
+        <div className="pointer-events-none absolute -right-16 -top-20 h-64 w-64 rounded-full bg-white/10 blur-3xl" />
         <span className="chip">预设空间 · PRESET SPACE</span>
         <h1 className="mt-4 max-w-3xl text-3xl font-black leading-tight neon-text sm:text-5xl">
           Welcome to <span className="text-amber-300">Preset Space</span>
@@ -204,6 +202,36 @@ export function HomeView({ initialQuery, favoritesOnly }: { initialQuery: string
             </div>
           ))}
         </dl>
+      </section>
+
+      {/* --------------------------------------------------- featured TikTok */}
+      <section className="card-3d overflow-hidden rounded-[28px] p-4 sm:p-6">
+        <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <span className="chip">VIDEO PILIHAN · TIKTOK</span>
+            <h2 className="mt-2 text-xl font-black text-white sm:text-2xl">Tonton di layar lebar</h2>
+            <p className="mt-1 text-xs text-slate-400">Video dari @meyro.kooo · format layar TV 16:9</p>
+          </div>
+          <a
+            href="https://vm.tiktok.com/ZSbcoJVhS/"
+            target="_blank"
+            rel="noopener noreferrer nofollow"
+            className="btn"
+          >
+            Buka di TikTok ↗
+          </a>
+        </div>
+        <div className="relative mx-auto aspect-video w-full overflow-hidden rounded-2xl border border-white/15 bg-black shadow-[0_18px_50px_rgba(0,0,0,0.55)]">
+          <div className="pointer-events-none absolute inset-0 z-10 rounded-2xl ring-1 ring-inset ring-white/10" />
+          <iframe
+            src="https://www.tiktok.com/embed/v2/7635250312604896533"
+            title="Video TikTok pilihan dari @meyro.kooo"
+            allow="encrypted-media; picture-in-picture; fullscreen"
+            allowFullScreen
+            loading="lazy"
+            className="absolute inset-0 h-full w-full border-0"
+          />
+        </div>
       </section>
 
       {/* ------------------------------------------------------- filters */}

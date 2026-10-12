@@ -220,19 +220,20 @@ export function PresetCard({ preset, compact = false }: { preset: PresetItem; co
             <span className="chip">Confidence {preset.confidence}%</span>
             {preset.playableUrl ? <span className="chip">Video siap</span> : <span className="chip">Embed TikTok</span>}
           </div>
-          <p className="text-[11px] text-slate-400">
-            👁 {formatCount(preset.viewCount ?? 0)} tontonan
-            {(preset.favoriteCount ?? 0) > 0 ? ` · ♥ ${formatCount(preset.favoriteCount ?? 0)}` : ""}
-          </p>
           <div className="flex gap-2">
+            <p className="mt-1 text-[11px] text-slate-400">
+              👁 {formatCount(preset.viewCount ?? 0)} tontonan
+              {(preset.favoriteCount ?? 0) > 0 ? ` · ♥ ${formatCount(preset.favoriteCount ?? 0)}` : ""}
+            </p>
             {preset.xmlUrl ? (
               <a
-                href={preset.xmlUrl}
+                href={`/api/preset/${preset.id}/xml`}
                 target="_blank"
                 rel="noopener noreferrer nofollow"
                 className="btn-xml"
+                title="XML + suara otomatis untuk Alight Motion"
               >
-                ⬇ Buka XML
+                ⬇ Buka XML + Suara
               </a>
             ) : (
               <span className="btn flex-1 !py-1.5 !text-[11px] !text-slate-400">XML —</span>
