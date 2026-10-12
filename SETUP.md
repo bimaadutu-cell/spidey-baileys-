@@ -142,3 +142,14 @@ SSRF rejection.
   `APP_URL` at the Vercel domain.
 * The admin dashboard reads live status from `bot_runtime`; a stale heartbeat is
   reported as **offline**, never as connected.
+
+## Riset otomatis (auto-scan)
+
+Server menjalankan riset sendiri di background (tanpa cron). Preset baru langsung masuk database dan muncul di beranda.
+
+| Env | Default | Fungsi |
+| --- | --- | --- |
+| `AUTO_SCAN_ENABLED` | `true` | `false` untuk mematikan |
+| `AUTO_SCAN_INTERVAL_MIN` | `30` | jeda antar putaran (menit, min 5) |
+| `AUTO_SCAN_QUERIES` | `40` | jumlah query per putaran |
+| `AUTO_SCAN_DEEP` | `10` | jumlah preset yang di-deep-scan per putaran |

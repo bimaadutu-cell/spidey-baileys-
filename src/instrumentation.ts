@@ -15,4 +15,11 @@ export async function register() {
   } catch (error) {
     console.error("[instrumentation] worker auto-start failed:", error);
   }
+
+  try {
+    const { startAutoScan } = await import("./server/services/auto-scan");
+    startAutoScan();
+  } catch (error) {
+    console.error("[instrumentation] auto-scan start failed:", error);
+  }
 }

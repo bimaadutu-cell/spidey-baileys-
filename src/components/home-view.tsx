@@ -1,9 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { PresetGrid, PresetSkeletonGrid, type PresetItem } from "./preset";
-import { ReviewForm } from "./forms";
+import { FeaturedPlayer } from "./featured-player";
 import { usePagedQuery, useDebounced, useLocalFavorites, useSession, useActiveScans } from "./hooks";
 
 export type CategoryDto = { slug: string; label: string; labelCn: string | null; count: number };
@@ -28,18 +27,6 @@ const SORTS = [
   { value: "confidence", label: "Confidence tertinggi" },
 ];
 
-const QUICK_KEYWORDS = [
-  "preset alight motion",
-  "xml preset",
-  "5mb preset",
-  "jedag jedug",
-  "soft spoken",
-  "velocity",
-  "anime edit",
-  "cinematic",
-  "sad edit",
-];
-
 export function HomeView({ initialQuery, favoritesOnly }: { initialQuery: string; favoritesOnly: boolean }) {
   const [term, setTerm] = useState(initialQuery);
   const debounced = useDebounced(term, 350);
@@ -47,69 +34,11 @@ export function HomeView({ initialQuery, favoritesOnly }: { initialQuery: string
   const [sort, setSort] = useState("latest");
   const [category, setCategory] = useState("all");
   const [creator, setCreator] = useState("");
-  const [scanKeyword, setScanKeyword] = useState("preset alight motion");
-  const [scanState, setScanState] = useState<{ busy: boolean; message: string | null }>({ busy: false, message: null });
-  const [ingestUrlValue, setIngestUrlValue] = useState("");
-  const [ingestState, setIngestState] = useState<{ busy: boolean; message: string | null }>({ busy: false, message: null });
-  const featuredVideoRef = useRef<HTMLVideoElement | null>(null);
-  const [featuredMuted, setFeaturedMuted] = useState(true);
-  const [featuredPlaying, setFeaturedPlaying] = useState(false);
-  const [featuredAutoplayBlocked, setFeaturedAutoplayBlocked] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [newCount, setNewCount] = useState(0);
   const { user } = useSession();
   const { favorites } = useLocalFavorites();
   const { scanningIds, scanningCount } = useActiveScans();
-
-  useEffect(() => {
-    const video = featuredVideoRef.current;
-    if (!video) return;
-
-    let cancelled = false;
-    const start = async () => {
-      // Muted autoplay is permitted by browsers far more consistently than autoplay with sound.
-      video.muted = true;
-      video.defaultMuted = true;
-      try {
-        await video.play();
-        if (!cancelled) {
-          setFeaturedMuted(true);
-          setFeaturedPlaying(true);
-          setFeaturedAutoplayBlocked(false);
-        }
-      } catch {
-        if (!cancelled) setFeaturedAutoplayBlocked(true);
-      }
-    };
-
-    const onCanPlay = () => void start();
-    video.addEventListener("canplay", onCanPlay, { once: true });
-    if (video.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) void start();
-    return () => {
-      cancelled = true;
-      video.removeEventListener("canplay", onCanPlay);
-    };
-  }, []);
-
-  const toggleFeaturedSound = async () => {
-    const video = featuredVideoRef.current;
-    if (!video) return;
-    if (video.paused) {
-      video.muted = false;
-      try {
-        await video.play();
-        setFeaturedMuted(false);
-        setFeaturedPlaying(true);
-        setFeaturedAutoplayBlocked(false);
-        return;
-      } catch {
-        video.muted = true;
-        setFeaturedMuted(true);
-        setFeaturedAutoplayBlocked(true);
-        return;
-      }
-    }
-    video.muted = !video.muted;
-    setFeaturedMuted(video.muted);
-  };
 
   const endpoint = useMemo(() => {
     const params = new URLSearchParams();
@@ -121,185 +50,62 @@ export function HomeView({ initialQuery, favoritesOnly }: { initialQuery: string
     if (category !== "all") params.set("category", category);
     if (creator.trim()) params.set("creator", creator.trim().replace(/^@/, ""));
     params.set("limit", "12");
-    const base = favoritesOnly ? `/api/presets?ids=${encodeURIComponent(favorites.join(","))}` : `/api/presets?${params}`;
-    return base;
-  }, [category, creator, debounced, filter, favoritesOnly, favorites, sort]);
+    if (refreshKey) params.set("r", String(refreshKey));
+    return favoritesOnly ? `/api/presets?ids=${encodeURIComponent(favorites.join(","))}&r=${refreshKey}` : `/api/presets?${params}`;
+  }, [category, creator, debounced, filter, favoritesOnly, favorites, sort, refreshKey]);
 
   const { items, total, hasMore, loading, error, locked, loadMore } = usePagedQuery<PresetItem>(endpoint, true);
+  const categories = usePagedQuery<CategoryDto & { id: string }>("/api/categories", true);
 
-  const categories = usePagedQuery<CategoryDto & { id: string }>(
-    "/api/categories",
-    true,
-  );
-
-  const ingestUrl = async (event: React.FormEvent) => {
-    event.preventDefault();
-    setIngestState({ busy: true, message: null });
-    try {
-      const res = await fetch("/api/scan?mode=ingest", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ url: ingestUrlValue.trim(), scan: true }),
-      });
-      const data = (await res.json()) as {
-        ok: boolean;
-        error?: string;
-        message?: string;
-        presetId?: string | null;
-      };
-      setIngestState({
-        busy: false,
-        message: data.ok
-          ? `${data.message ?? "Preset tersimpan"} — lihat detail untuk status XML/5MB.`
-          : data.error ?? "Ingest gagal",
-      });
-      if (data.ok && data.presetId) {
-        setIngestUrlValue("");
-        window.location.href = `/preset/${data.presetId}`;
+  // Auto-update: the server keeps researching in the background; here we just
+  // watch the global total and pull new presets in as soon as they land.
+  const baseline = useRef<number | null>(null);
+  useEffect(() => {
+    if (favoritesOnly) return;
+    let alive = true;
+    const tick = async () => {
+      try {
+        const res = await fetch("/api/presets?limit=1&sort=latest&page=1", { cache: "no-store" });
+        const data = (await res.json()) as { ok: boolean; total?: number };
+        if (!alive || !data.ok || typeof data.total !== "number") return;
+        if (baseline.current === null) {
+          baseline.current = data.total;
+          return;
+        }
+        const diff = data.total - baseline.current;
+        if (diff > 0) {
+          if (window.scrollY < 240) {
+            baseline.current = data.total;
+            setNewCount(0);
+            setRefreshKey((k) => k + 1);
+          } else {
+            setNewCount(diff);
+          }
+        }
+      } catch {
+        /* keep polling */
       }
-    } catch {
-      setIngestState({ busy: false, message: "Koneksi gagal" });
-    }
-  };
+    };
+    void tick();
+    const timer = setInterval(() => void tick(), 30000);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+  }, [favoritesOnly]);
 
-  const runScan = async () => {
-    setScanState({ busy: true, message: null });
-    try {
-      const res = await fetch("/api/scan?mode=keyword", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ keyword: scanKeyword, count: 12 }),
-      });
-      const data = (await res.json()) as {
-        ok: boolean;
-        error?: string;
-        report?: { found: number; ingested: number; duplicates: number; providers: { provider: string; ok: boolean; message: string }[] };
-      };
-      if (!data.ok) {
-        setScanState({ busy: false, message: data.error ?? "Scan gagal" });
-        return;
-      }
-      const report = data.report!;
-      const failures = report.providers.filter((p) => !p.ok).map((p) => `${p.provider}: ${p.message}`);
-      setScanState({
-        busy: false,
-        message: `Ditemukan ${report.found} video · baru ${report.ingested} · duplikat ${report.duplicates}. ${
-          failures.length ? `Provider gagal → ${failures.join(" | ")}` : ""
-        }`,
-      });
-      loadMore();
-      window.location.reload();
-    } catch {
-      setScanState({ busy: false, message: "Koneksi gagal" });
-    }
+  const applyNew = () => {
+    baseline.current = null;
+    setNewCount(0);
+    setRefreshKey((k) => k + 1);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   return (
-    <div className="space-y-10">
-      {/* ------------------------------------------- premium calling banner */}
-      <Link
-        href="/premium-alight"
-        className="card-3d card-3d-hover group flex items-center gap-4 rounded-[24px] p-4 sm:p-5"
-      >
-        <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-white to-slate-300 text-xl text-black">
-          ✦
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="flex items-center gap-2">
-            <span className="chip animate-pulse">PremiumAlight</span>
-            <span className="live-dot" />
-          </span>
-          <span className="mt-1.5 block text-sm font-semibold text-white sm:text-base">
-            Ingin gunakan preset tapi AM belum premium? Ayo gunakan aku
-          </span>
-          <span className="mt-0.5 block text-[11px] text-slate-400">
-            Aktifkan Alight Motion Premium 1 tahun — terbuka setelah 3 ulasan bintang 5.
-          </span>
-        </span>
-        <span className="shrink-0 text-slate-400 transition group-hover:translate-x-1">→</span>
-      </Link>
-
-      {/* ---------------------------------------------------------- hero */}
-      <section className="card-3d relative overflow-hidden rounded-[30px] p-6 sm:p-10">
-        <div className="pointer-events-none absolute -right-16 -top-20 h-64 w-64 rounded-full bg-white/10 blur-3xl" />
-        <span className="chip">预设空间 · PRESET SPACE</span>
-        <h1 className="mt-4 max-w-3xl text-3xl font-black leading-tight neon-text sm:text-5xl">
-          Welcome to <span className="text-amber-300">Preset Space</span>
-        </h1>
-        <p className="mt-4 max-w-2xl text-sm leading-relaxed text-slate-400 sm:text-base">
-          Preset Space menemukan preset Alight Motion dari konten publik TikTok, memindai caption &amp; komentar,
-          mendeteksi link <strong className="text-slate-200">XML</strong> dan{" "}
-          <strong className="text-slate-200">5MB</strong>, lalu menyimpannya permanen di PostgreSQL. Hasil yang belum
-          terverifikasi ditampilkan jujur sebagai &ldquo;belum ditemukan&rdquo;, bukan dibuat-buat.
-        </p>
-
-        <div className="mt-6 flex flex-wrap gap-2">
-          <Link href="/discover" className="btn btn-primary">
-            ▶ Buka video feed
-          </Link>
-          <a href="#scanner" className="btn">
-            ⚡ Jalankan scanner
-          </a>
-          <Link href="/?favorites=1" className="chip" data-active={favoritesOnly}>
-            ★ Favorites{favorites.length ? ` (${favorites.length})` : ""}
-          </Link>
-        </div>
-
-        <dl className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {[
-            { label: "Preset tersimpan", value: total },
-            { label: "Kategori", value: categories.items.length },
-            { label: "Login", value: user ? "Aktif" : "Anonim (10 preset)" },
-            { label: "Sumber", value: "TikTok publik" },
-          ].map((stat) => (
-            <div key={stat.label} className="rounded-2xl border border-white/10 bg-white/4 p-3">
-              <dt className="text-[10px] uppercase tracking-[0.16em] text-slate-500">{stat.label}</dt>
-              <dd className="mt-1 text-sm font-semibold text-white">{stat.value}</dd>
-            </div>
-          ))}
-        </dl>
-      </section>
-
-      {/* ------------------------------------------ featured landscape video */}
-      <section className="card-3d overflow-hidden rounded-[28px] p-4 sm:p-6">
-        <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-          <a
-            href="https://files.catbox.moe/kq2a4q.mp4"
-            target="_blank"
-            rel="noopener noreferrer nofollow"
-            className="btn"
-          >
-            Buka video ↗
-          </a>
-        </div>
-        <div className="relative mx-auto aspect-video w-full overflow-hidden rounded-2xl border border-white/15 bg-black shadow-[0_18px_50px_rgba(0,0,0,0.55)]">
-          <div className="pointer-events-none absolute inset-0 z-10 rounded-2xl ring-1 ring-inset ring-white/10" />
-          <video
-            ref={featuredVideoRef}
-            src="https://files.catbox.moe/kq2a4q.mp4"
-            title="Video gameplay dalam orientasi landscape"
-            autoPlay
-            controls
-            muted
-            loop
-            playsInline
-            preload="metadata"
-            className="absolute left-1/2 top-1/2 max-w-none -translate-x-1/2 -translate-y-1/2 rotate-90 object-contain"
-            style={{ width: "56.25%", height: "177.7778%" }}
-            onPlaying={() => setFeaturedPlaying(true)}
-            onPause={() => setFeaturedPlaying(false)}
-            onVolumeChange={(event) => setFeaturedMuted(event.currentTarget.muted)}
-            onError={() => setFeaturedAutoplayBlocked(true)}
-          />
-          <button
-            type="button"
-            onClick={() => void toggleFeaturedSound()}
-            className="absolute bottom-3 right-3 z-20 rounded-full border border-white/25 bg-black/75 px-3 py-2 text-xs font-semibold text-white"
-            aria-label={featuredAutoplayBlocked ? "Putar video dengan suara" : featuredMuted ? "Nyalakan suara video" : "Bisukan video"}
-          >
-            {featuredAutoplayBlocked ? "▶ Putar video" : featuredMuted ? "🔊 Nyalakan suara" : featuredPlaying ? "🔇 Bisukan" : "▶ Putar video"}
-          </button>
-        </div>
+    <div className="space-y-8">
+      {/* ------------------------------------------------ featured video */}
+      <section className="card-3d rounded-[28px] p-3 sm:p-5">
+        <FeaturedPlayer src="https://files.catbox.moe/kq2a4q.mp4" title="Video unggulan" />
       </section>
 
       {/* ------------------------------------------------------- filters */}
@@ -370,19 +176,33 @@ export function HomeView({ initialQuery, favoritesOnly }: { initialQuery: string
         </div>
       </section>
 
+      {/* ------------------------------------- new presets (auto research) */}
+      {newCount > 0 ? (
+        <button
+          onClick={applyNew}
+          className="btn btn-primary fixed left-1/2 top-20 z-40 -translate-x-1/2 shadow-xl"
+        >
+          ↑ {newCount} preset baru ditemukan
+        </button>
+      ) : null}
+
       {/* -------------------------------------------------------- presets */}
       <section>
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-bold neon-text">
-            {favoritesOnly ? "★ Favorites" : filter === "xml" ? "XML Available" : filter === "five-mb" ? "5MB Available" : "Preset"}
+            {favoritesOnly ? "★ Favorites" : filter === "xml" ? "XML Available" : filter === "five-mb" ? "5MB Available" : "Semua Preset"}
           </h2>
           <span className="flex items-center gap-2 text-[11px] text-slate-500">
             {scanningCount > 0 ? (
               <span className="chip !border-white/40 !bg-white/15 !text-white">
                 <span className="live-dot" /> {scanningCount} preset sedang di-scan
               </span>
-            ) : null}
-            {user ? "Akses penuh" : "Anonim dibatasi 10 preset (server-side)"}
+            ) : (
+              <span className="flex items-center gap-1.5">
+                <span className="live-dot" /> riset otomatis aktif
+              </span>
+            )}
+            {user ? null : "Anonim dibatasi (server-side)"}
           </span>
         </div>
 
@@ -400,88 +220,6 @@ export function HomeView({ initialQuery, favoritesOnly }: { initialQuery: string
             scanningIds={scanningIds}
           />
         )}
-      </section>
-
-      {/* ------------------------------------------------------- scanner */}
-      <section id="scanner" className="card-3d rounded-3xl p-6">
-        <h2 className="text-lg font-bold neon-text">Deep Preset Scanner</h2>
-        <p className="mt-2 max-w-3xl text-sm text-slate-400">
-          Scanner menjalankan Tahap A–E: metadata video → analisis caption → analisis komentar (bila provider
-          menyediakan) → pencarian ulang relevan + resolver Bimz → validasi URL. Setiap tahap dicatat di tabel
-          <code className="mx-1 rounded bg-white/10 px-1">scan_attempts</code> dan dapat diperiksa di{" "}
-          <Link href="/admin" className="underline">
-            /admin
-          </Link>
-          .
-        </p>
-
-        <div className="mt-4 flex flex-wrap gap-2">
-          {QUICK_KEYWORDS.map((keyword) => (
-            <button key={keyword} onClick={() => setScanKeyword(keyword)} className="chip" data-active={scanKeyword === keyword}>
-              {keyword}
-            </button>
-          ))}
-        </div>
-
-        <div className="mt-4 flex flex-wrap items-center gap-3">
-          <input
-            value={scanKeyword}
-            onChange={(event) => setScanKeyword(event.target.value)}
-            className="min-w-56 flex-1 rounded-2xl border border-white/12 bg-white/5 px-4 py-3 text-sm outline-none focus:border-white/35"
-          />
-          <button onClick={() => void runScan()} disabled={scanState.busy} className="btn btn-primary">
-            {scanState.busy ? "Memindai…" : "Cari & scan preset"}
-          </button>
-        </div>
-
-        <form
-          onSubmit={(event) => void ingestUrl(event)}
-          className="mt-4 rounded-2xl border border-white/10 bg-white/4 p-4"
-        >
-          <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">
-            Tambah preset dari URL TikTok
-          </p>
-          <p className="mt-1 text-xs text-slate-400">
-            Metadata resmi (oEmbed) + metadata provider dibaca langsung, lalu deep scanner Tahap A–E dijalankan atas
-            video tersebut. Ini jalur pencarian yang selalu tersedia.
-          </p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <input
-              value={ingestUrlValue}
-              onChange={(event) => setIngestUrlValue(event.target.value)}
-              placeholder="https://www.tiktok.com/@kreator/video/1234567890"
-              className="min-w-56 flex-1 rounded-xl border border-white/12 bg-white/5 px-3.5 py-2.5 text-sm outline-none focus:border-white/35"
-            />
-            <button type="submit" disabled={ingestState.busy || ingestUrlValue.trim().length < 10} className="btn">
-              {ingestState.busy ? "Memproses…" : "Ingest & scan"}
-            </button>
-          </div>
-          {ingestState.message ? (
-            <p className="mt-3 break-words text-xs text-slate-300">{ingestState.message}</p>
-          ) : null}
-        </form>
-
-        {scanState.message ? (
-          <p className="mt-3 rounded-2xl border border-white/12 bg-white/5 p-3 text-xs text-slate-300">{scanState.message}</p>
-        ) : null}
-      </section>
-
-      {/* -------------------------------------------------------- review */}
-      <section id="ulasan" className="grid gap-4 lg:grid-cols-2">
-        <ReviewForm />
-        <div className="card-3d rounded-3xl p-6">
-          <h2 className="text-lg font-bold neon-text">Integrasi WhatsApp</h2>
-          <p className="mt-2 text-sm text-slate-400">
-            Ulasan disimpan lebih dulu ke PostgreSQL, kemudian dimasukkan ke antrean{" "}
-            <code className="rounded bg-white/10 px-1">whatsapp_delivery_logs</code>. Worker SPACEPRS (Baileys) mengirim
-            gambar PNG ulasan ke nomor developer. Jika bot offline, ulasan tetap tersimpan dan akan dicoba ulang.
-          </p>
-          <ul className="mt-4 space-y-1.5 text-xs text-slate-500">
-            <li>• Status pengiriman: queued → pending → sent / failed</li>
-            <li>• Idempotensi memakai review ID sehingga retry tidak mengirim dua kali</li>
-            <li>• Gambar dirender server-side (sharp), bukan teks yang dianggap gambar</li>
-          </ul>
-        </div>
       </section>
     </div>
   );
