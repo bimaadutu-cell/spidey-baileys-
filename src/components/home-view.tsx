@@ -204,32 +204,33 @@ export function HomeView({ initialQuery, favoritesOnly }: { initialQuery: string
         </dl>
       </section>
 
-      {/* --------------------------------------------------- featured TikTok */}
+      {/* ------------------------------------------ featured landscape video */}
       <section className="card-3d overflow-hidden rounded-[28px] p-4 sm:p-6">
         <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
           <div>
-            <span className="chip">VIDEO PILIHAN · TIKTOK</span>
-            <h2 className="mt-2 text-xl font-black text-white sm:text-2xl">Tonton di layar lebar</h2>
-            <p className="mt-1 text-xs text-slate-400">Video dari @meyro.kooo · format layar TV 16:9</p>
+            <span className="chip">GAMEPLAY · MODE LANDSCAPE</span>
+            <h2 className="mt-2 text-xl font-black text-white sm:text-2xl">Tonton menyamping</h2>
+            <p className="mt-1 text-xs text-slate-400">Video diputar 90° agar tampil horizontal seperti saat main Free Fire.</p>
           </div>
           <a
-            href="https://vm.tiktok.com/ZSbcoJVhS/"
+            href="https://files.catbox.moe/kq2a4q.mp4"
             target="_blank"
             rel="noopener noreferrer nofollow"
             className="btn"
           >
-            Buka di TikTok ↗
+            Buka video ↗
           </a>
         </div>
         <div className="relative mx-auto aspect-video w-full overflow-hidden rounded-2xl border border-white/15 bg-black shadow-[0_18px_50px_rgba(0,0,0,0.55)]">
           <div className="pointer-events-none absolute inset-0 z-10 rounded-2xl ring-1 ring-inset ring-white/10" />
-          <iframe
-            src="https://www.tiktok.com/embed/v2/7635250312604896533"
-            title="Video TikTok pilihan dari @meyro.kooo"
-            allow="encrypted-media; picture-in-picture; fullscreen"
-            allowFullScreen
-            loading="lazy"
-            className="absolute inset-0 h-full w-full border-0"
+          <video
+            src="https://files.catbox.moe/kq2a4q.mp4"
+            title="Video gameplay dalam orientasi landscape"
+            controls
+            playsInline
+            preload="metadata"
+            className="absolute left-1/2 top-1/2 max-w-none -translate-x-1/2 -translate-y-1/2 rotate-90 object-contain"
+            style={{ width: "56.25%", height: "177.7778%" }}
           />
         </div>
       </section>
