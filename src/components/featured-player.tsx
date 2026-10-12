@@ -13,11 +13,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 export function FeaturedPlayer({
   src,
   title,
-  rotation = -90,
+  rotation = 90,
 }: {
   src: string;
   title?: string;
-  /** Degrees applied to a portrait file so it fills a landscape frame. -90 = kepala di atas. Use 90 to flip, 0 to disable. */
+  /** Degrees applied to a portrait file so it fills a landscape frame. Use 90 for the opposite sideways direction, -90 to reverse it, and 0 to disable. */
   rotation?: 0 | 90 | -90 | 180;
 }) {
   const wrapRef = useRef<HTMLDivElement | null>(null);

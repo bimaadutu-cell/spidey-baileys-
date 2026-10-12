@@ -127,7 +127,7 @@ export function HomeView({ initialQuery, favoritesOnly }: { initialQuery: string
 
       {/* ------------------------------------------------ featured video */}
       <section className="card-3d rounded-[28px] p-3 sm:p-5">
-        <FeaturedPlayer src="https://files.catbox.moe/kq2a4q.mp4" title="Video unggulan" />
+        <FeaturedPlayer src="https://files.catbox.moe/kq2a4q.mp4" title="Video unggulan" rotation={90} />
       </section>
 
       {/* ------------------------------------------------------- filters */}
