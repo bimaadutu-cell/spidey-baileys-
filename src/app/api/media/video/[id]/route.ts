@@ -29,7 +29,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
   const stored = await getStoredVideo(id);
   if (stored) return serveStoredVideo(stored, range);
 
-  // 1b. user-uploaded local file under /uploads
+  // 1b. user-uploaded local file, including files on a persistent volume.
   const rowsLocal = await db
     .select({ videoUrl: presets.videoUrl })
     .from(presets)
@@ -39,24 +39,49 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
   if (localUrl.startsWith("/uploads/") || localUrl.startsWith("/api/media/local")) {
     const fs = await import("node:fs");
     const path = await import("node:path");
-    let filePath = "";
-    if (localUrl.startsWith("/uploads/")) {
-      filePath = path.join(process.cwd(), "public", localUrl.replace(/^\//, ""));
-    } else {
-      const u = new URL(localUrl, "http://local");
-      const f = u.searchParams.get("f") || "";
-      filePath = path.join(process.cwd(), "public", "uploads", path.basename(f));
-    }
-    if (filePath && fs.existsSync(filePath)) {
-      const stat = fs.statSync(filePath);
+    const filename = localUrl.startsWith("/uploads/")
+      ? path.basename(localUrl.slice("/uploads/".length))
+      : path.basename(new URL(localUrl, "http://local").searchParams.get("f") || "");
+    const filePath = [
+      path.join(process.cwd(), "public", "uploads", filename),
+      path.join("/data/uploads", filename),
+      process.env.UPLOAD_DIR ? path.join(process.env.UPLOAD_DIR, filename) : "",
+      path.join("/tmp/preset-uploads", filename),
+    ].find((candidate) => candidate && fs.existsSync(candidate));
+    if (filename && filePath) {
       const data = fs.readFileSync(filePath);
+      const ext = path.extname(filename).toLowerCase();
+      const contentType = ext === ".webm" ? "video/webm" : ext === ".mov" ? "video/quicktime" : "video/mp4";
+      const rangeMatch = range ? /^bytes=(\d*)-(\d*)$/.exec(range) : null;
+      const total = data.length;
+      if (range && !rangeMatch) {
+        return new Response(null, { status: 416, headers: { "content-range": `bytes */${total}` } });
+      }
+      if (rangeMatch) {
+        const start = rangeMatch[1] ? Number(rangeMatch[1]) : Math.max(0, total - Number(rangeMatch[2] || 0));
+        const end = rangeMatch[1] ? Math.min(Number(rangeMatch[2] || total - 1), total - 1) : total - 1;
+        if (start >= total || start > end) {
+          return new Response(null, { status: 416, headers: { "content-range": `bytes */${total}` } });
+        }
+        const chunk = data.subarray(start, end + 1);
+        return new Response(new Uint8Array(chunk), {
+          status: 206,
+          headers: {
+            "Content-Type": contentType,
+            "Content-Length": String(chunk.length),
+            "Content-Range": `bytes ${start}-${end}/${total}`,
+            "Accept-Ranges": "bytes",
+            "Cache-Control": "public, max-age=31536000, immutable",
+          },
+        });
+      }
       return new Response(data, {
         status: 200,
         headers: {
-          "Content-Type": "video/mp4",
-          "Content-Length": String(stat.size),
+          "Content-Type": contentType,
+          "Content-Length": String(data.length),
           "Accept-Ranges": "bytes",
-          "Cache-Control": "public, max-age=86400",
+          "Cache-Control": "public, max-age=31536000, immutable",
         },
       });
     }

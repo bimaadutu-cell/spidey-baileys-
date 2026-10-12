@@ -69,6 +69,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     .select({
       id: presets.id,
       tiktokId: presets.tiktokId,
+      discoverySource: presets.discoverySource,
       overallStatus: presets.overallStatus,
       scanAttempts: presets.scanAttempts,
       lastScannedAt: presets.lastScannedAt,
@@ -79,6 +80,9 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
 
   const preset = rows[0];
   if (!preset) return fail("Preset tidak ditemukan", 404);
+  if (preset.discoverySource === "user_upload") {
+    return json({ ok: true, scanning: false, skipped: "unggahan manual tidak dipindai" });
+  }
 
   // Already complete and scanned recently → nothing to do.
   const scannedRecently =

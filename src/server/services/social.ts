@@ -111,50 +111,58 @@ export async function uploadUserPreset(input: {
   }
   const xmlUrl = input.xmlUrl ? sanitizeText(input.xmlUrl, 900) : null;
   const fiveMbUrl = input.fiveMbUrl ? sanitizeText(input.fiveMbUrl, 900) : null;
-  // XML / 5MB optional at upload time — user can add later via edit/admin
-
+  if (xmlUrl && !/^https?:\/\//i.test(xmlUrl)) {
+    return { ok: false as const, message: "Link XML harus berupa URL HTTP/HTTPS yang valid" };
+  }
+  if (fiveMbUrl && !/^https?:\/\//i.test(fiveMbUrl)) {
+    return { ok: false as const, message: "Link 5MB harus berupa URL HTTP/HTTPS yang valid" };
+  }
 
   const tiktokId = `upload_${input.userId.slice(0, 8)}_${Date.now()}`;
-  const [preset] = await db
-    .insert(presets)
-    .values({
-      tiktokId,
-      videoUrl,
+  const caption = input.caption ? sanitizeText(input.caption, 2000) : null;
+  const preset = await db.transaction(async (tx) => {
+    const [created] = await tx
+      .insert(presets)
+      .values({
+        tiktokId,
+        videoUrl,
+        title,
+        thumbnailUrl: input.thumbnailUrl ? sanitizeText(input.thumbnailUrl, 900) : null,
+        caption: caption || title,
+        xmlUrl,
+        fiveMbUrl,
+        xmlStatus: xmlUrl ? "FOUND" : "PENDING",
+        fiveMbStatus: fiveMbUrl ? "FOUND" : "PENDING",
+        overallStatus: xmlUrl && fiveMbUrl ? "COMPLETE" : xmlUrl ? "XML_FOUND" : fiveMbUrl ? "FIVE_MB_FOUND" : "NEW",
+        confidence: xmlUrl && fiveMbUrl ? 100 : xmlUrl || fiveMbUrl ? 75 : 0,
+        discoverySource: "user_upload",
+        uploaderUserId: input.userId,
+        viewCount: 0,
+        favoriteCount: 0,
+        publishedAt: new Date(),
+        lastScannedAt: null,
+      })
+      .returning();
+
+    if (!created) throw new Error("Preset gagal disimpan");
+    await tx.insert(userUploads).values({
+      userId: input.userId,
+      presetId: created.id,
       title,
+      caption,
+      videoUrl,
       thumbnailUrl: input.thumbnailUrl ? sanitizeText(input.thumbnailUrl, 900) : null,
-      caption: input.caption ? sanitizeText(input.caption, 2000) : title,
       xmlUrl,
       fiveMbUrl,
-      // User already configured links — NEVER queue for scanner
-      xmlStatus: xmlUrl ? "FOUND" : "PENDING",
-      fiveMbStatus: fiveMbUrl ? "FOUND" : "PENDING",
-      overallStatus: xmlUrl || fiveMbUrl ? "COMPLETE" : "COMPLETE",
-      confidence: xmlUrl || fiveMbUrl ? 100 : 50,
-      discoverySource: "user_upload",
-      uploaderUserId: input.userId,
-      viewCount: 0,
-      favoriteCount: 0,
-      publishedAt: new Date(),
-      lastScannedAt: new Date(), // mark as already "done" so retry scan skips it
-    })
-    .returning();
-
-  await db.insert(userUploads).values({
-    userId: input.userId,
-    presetId: preset!.id,
-    title,
-    caption: input.caption ? sanitizeText(input.caption, 2000) : null,
-    videoUrl,
-    thumbnailUrl: input.thumbnailUrl ? sanitizeText(input.thumbnailUrl, 900) : null,
-    xmlUrl,
-    fiveMbUrl,
-    status: "published",
+      status: "published",
+    });
+    return created;
   });
 
   return {
     ok: true as const,
-    message: "Preset berhasil di-upload ke Preset Space (muncul di Discover)",
-    presetId: preset!.id,
+    message: "Preset berhasil disimpan permanen ke database dan tampil di Preset Space",
+    presetId: preset.id,
   };
 }
 

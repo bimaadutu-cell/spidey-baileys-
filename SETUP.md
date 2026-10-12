@@ -29,6 +29,7 @@ The project was rebuilt from zero; nothing was carried over from an older codeba
 | Variable | Required | Purpose |
 | --- | --- | --- |
 | `DATABASE_URL` | ✅ | PostgreSQL connection (Neon: `postgresql://…?sslmode=require`) |
+| `UPLOAD_DIR` | optional | Directory on a persistent mounted volume for uploaded video files (default: `/data/uploads` when `/data` exists; otherwise `public/uploads`) |
 | `INTERNAL_TOKEN` | ✅ (bot) | Shared secret for `/api/internal/whatsapp` (server-to-server) |
 | `ANON_PRESET_LIMIT` | optional | Anonymous preset cap (default `10`, enforced server-side) |
 | `ADMIN_USERNAME` / `ADMIN_PASSWORD` | optional | The first account registered with `ADMIN_USERNAME` becomes admin |
@@ -45,6 +46,11 @@ The project was rebuilt from zero; nothing was carried over from an older codeba
 
 No secret is ever imported into a client component; only `NEXT_PUBLIC_*` values
 would be exposed and none are used.
+
+User-uploaded preset records and XML/5MB links are saved transactionally in PostgreSQL.
+For uploaded video files to survive redeploys, mount persistent storage and set
+`UPLOAD_DIR` to that mount (or provide a persistent `/data` volume). Without a mounted
+volume, the local `public/uploads` fallback may be ephemeral on serverless hosts.
 
 ---
 

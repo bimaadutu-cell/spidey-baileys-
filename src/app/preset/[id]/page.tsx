@@ -61,8 +61,8 @@ export default async function PresetDetailPage({ params }: { params: Promise<{ i
           </div>
           <div className="grid grid-cols-2 gap-2">
             {xmlLink || preset.xmlUrl ? (
-              <a href={`/api/preset/${preset.id}/xml`} target="_blank" rel="noopener noreferrer nofollow" className="btn btn-primary !text-xs" title="XML dengan suara otomatis">
-                Gunakan XML + Suara
+              <a href={`/api/preset/${preset.id}/xml`} target="_blank" rel="noopener noreferrer nofollow" className="btn btn-primary !text-xs" title="Buka file XML asli">
+                Buka XML
               </a>
             ) : (
               <span className="btn !text-xs !text-slate-400">XML belum ditemukan</span>

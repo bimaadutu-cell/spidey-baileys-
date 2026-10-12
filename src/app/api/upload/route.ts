@@ -75,34 +75,16 @@ export async function POST(req: NextRequest) {
           ? "mov"
           : "mp4";
       const filename = `${user.id.slice(0, 8)}_${Date.now()}_${randomUUID().slice(0, 8)}.${ext}`;
-      // Always write to public/uploads so URL is always /uploads/<file>
       const pub = path.join(process.cwd(), "public", "uploads");
-      try {
-        if (!fs.existsSync(pub)) fs.mkdirSync(pub, { recursive: true });
-      } catch {
-        /* fallback below */
-      }
-      let fullPath = path.join(pub, filename);
+      const dir = uploadRoot();
+      const fullPath = path.join(dir, filename);
       const buffer = Buffer.from(await blob.arrayBuffer());
-      try {
-        fs.writeFileSync(fullPath, buffer);
-      } catch {
-        const dir = uploadRoot();
-        fullPath = path.join(dir, filename);
-        fs.writeFileSync(fullPath, buffer);
-      }
-      // Canonical public URL (also works via /api/media/local fallback)
-      const videoUrl = `/uploads/${filename}`;
-      // Mirror to /data/uploads if available (Railway volume)
-      try {
-        if (fs.existsSync("/data")) {
-          const dataDir = "/data/uploads";
-          if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
-          fs.copyFileSync(fullPath, path.join(dataDir, filename));
-        }
-      } catch {
-        /* ignore */
-      }
+      fs.writeFileSync(fullPath, buffer);
+      // Keep /data/UPLOAD_DIR-backed videos reachable through the local media API
+      // rather than a transient Next.js public directory URL.
+      const videoUrl = path.resolve(dir) === path.resolve(pub)
+        ? `/uploads/${filename}`
+        : `/api/media/local?f=${encodeURIComponent(filename)}`;
 
       const result = await uploadUserPreset({
         userId: user.id,

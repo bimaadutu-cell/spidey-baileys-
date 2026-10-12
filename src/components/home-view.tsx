@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { PresetGrid, PresetSkeletonGrid, type PresetItem } from "./preset";
 import { ReviewForm } from "./forms";
 import { usePagedQuery, useDebounced, useLocalFavorites, useSession, useActiveScans } from "./hooks";
@@ -43,17 +43,73 @@ const QUICK_KEYWORDS = [
 export function HomeView({ initialQuery, favoritesOnly }: { initialQuery: string; favoritesOnly: boolean }) {
   const [term, setTerm] = useState(initialQuery);
   const debounced = useDebounced(term, 350);
-  const [filter, setFilter] = useState("complete");
-  const [sort, setSort] = useState("confidence");
+  const [filter, setFilter] = useState("");
+  const [sort, setSort] = useState("latest");
   const [category, setCategory] = useState("all");
   const [creator, setCreator] = useState("");
   const [scanKeyword, setScanKeyword] = useState("preset alight motion");
   const [scanState, setScanState] = useState<{ busy: boolean; message: string | null }>({ busy: false, message: null });
   const [ingestUrlValue, setIngestUrlValue] = useState("");
   const [ingestState, setIngestState] = useState<{ busy: boolean; message: string | null }>({ busy: false, message: null });
+  const featuredVideoRef = useRef<HTMLVideoElement | null>(null);
+  const [featuredMuted, setFeaturedMuted] = useState(true);
+  const [featuredPlaying, setFeaturedPlaying] = useState(false);
+  const [featuredAutoplayBlocked, setFeaturedAutoplayBlocked] = useState(false);
   const { user } = useSession();
   const { favorites } = useLocalFavorites();
   const { scanningIds, scanningCount } = useActiveScans();
+
+  useEffect(() => {
+    const video = featuredVideoRef.current;
+    if (!video) return;
+
+    let cancelled = false;
+    const start = async () => {
+      // Muted autoplay is permitted by browsers far more consistently than autoplay with sound.
+      video.muted = true;
+      video.defaultMuted = true;
+      try {
+        await video.play();
+        if (!cancelled) {
+          setFeaturedMuted(true);
+          setFeaturedPlaying(true);
+          setFeaturedAutoplayBlocked(false);
+        }
+      } catch {
+        if (!cancelled) setFeaturedAutoplayBlocked(true);
+      }
+    };
+
+    const onCanPlay = () => void start();
+    video.addEventListener("canplay", onCanPlay, { once: true });
+    if (video.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) void start();
+    return () => {
+      cancelled = true;
+      video.removeEventListener("canplay", onCanPlay);
+    };
+  }, []);
+
+  const toggleFeaturedSound = async () => {
+    const video = featuredVideoRef.current;
+    if (!video) return;
+    if (video.paused) {
+      video.muted = false;
+      try {
+        await video.play();
+        setFeaturedMuted(false);
+        setFeaturedPlaying(true);
+        setFeaturedAutoplayBlocked(false);
+        return;
+      } catch {
+        video.muted = true;
+        setFeaturedMuted(true);
+        setFeaturedAutoplayBlocked(true);
+        return;
+      }
+    }
+    video.muted = !video.muted;
+    setFeaturedMuted(video.muted);
+  };
 
   const endpoint = useMemo(() => {
     const params = new URLSearchParams();
@@ -219,6 +275,7 @@ export function HomeView({ initialQuery, favoritesOnly }: { initialQuery: string
         <div className="relative mx-auto aspect-video w-full overflow-hidden rounded-2xl border border-white/15 bg-black shadow-[0_18px_50px_rgba(0,0,0,0.55)]">
           <div className="pointer-events-none absolute inset-0 z-10 rounded-2xl ring-1 ring-inset ring-white/10" />
           <video
+            ref={featuredVideoRef}
             src="https://files.catbox.moe/kq2a4q.mp4"
             title="Video gameplay dalam orientasi landscape"
             autoPlay
@@ -226,10 +283,22 @@ export function HomeView({ initialQuery, favoritesOnly }: { initialQuery: string
             muted
             loop
             playsInline
-            preload="auto"
+            preload="metadata"
             className="absolute left-1/2 top-1/2 max-w-none -translate-x-1/2 -translate-y-1/2 rotate-90 object-contain"
             style={{ width: "56.25%", height: "177.7778%" }}
+            onPlaying={() => setFeaturedPlaying(true)}
+            onPause={() => setFeaturedPlaying(false)}
+            onVolumeChange={(event) => setFeaturedMuted(event.currentTarget.muted)}
+            onError={() => setFeaturedAutoplayBlocked(true)}
           />
+          <button
+            type="button"
+            onClick={() => void toggleFeaturedSound()}
+            className="absolute bottom-3 right-3 z-20 rounded-full border border-white/25 bg-black/75 px-3 py-2 text-xs font-semibold text-white"
+            aria-label={featuredAutoplayBlocked ? "Putar video dengan suara" : featuredMuted ? "Nyalakan suara video" : "Bisukan video"}
+          >
+            {featuredAutoplayBlocked ? "▶ Putar video" : featuredMuted ? "🔊 Nyalakan suara" : featuredPlaying ? "🔇 Bisukan" : "▶ Putar video"}
+          </button>
         </div>
       </section>
 

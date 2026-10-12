@@ -13,8 +13,8 @@ import { PresetGrid, ScanningPill, StatusPill, type PresetItem } from "./preset"
  * hit we retry once through our own byte-proxy, and only then fall back to the
  * official TikTok embed.
  *
- * While a video is the active item, the client asks the server to run the real
- * Bimz scan for it and shows "Sedang scan preset…" until a real answer lands.
+ * While a public TikTok video is active, the client asks for a real Bimz scan.
+ * Manually uploaded presets are deliberately excluded from scanning.
  */
 export function VideoFeed({
   items,
@@ -80,8 +80,11 @@ export function VideoFeed({
     if (!activeId) return;
     const preset = items.find((item) => item.id === activeId);
     if (!preset) return;
+    if (preset.discoverySource === "user_upload") return;
     // Only scan what is actually missing — never re-scan a complete preset.
     if (preset.xmlStatus === "FOUND" && preset.fiveMbStatus === "FOUND") return;
+    // This starts asynchronous network work; state updates happen only after the response.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void triggerScan(activeId);
   }, [activeId, items, triggerScan]);
 
@@ -218,12 +221,6 @@ function FeedItem({
   const [stalled, setStalled] = useState(false);
 
   const src = tier === 0 ? base : `${base}?proxy=1`;
-
-  useEffect(() => {
-    setTier(0);
-    setReady(false);
-    setStalled(false);
-  }, [preset.id]);
 
   // Only the active element loads/plays — keeps memory and GPU layers bounded.
   useEffect(() => {

@@ -37,6 +37,7 @@ export type PresetItem = {
   publishedAt: string | null;
   lastScannedAt: string | null;
   hashtags: string[];
+  discoverySource?: string;
 };
 
 export const STATUS_LABEL: Record<string, string> = {
@@ -231,9 +232,9 @@ export function PresetCard({ preset, compact = false }: { preset: PresetItem; co
                 target="_blank"
                 rel="noopener noreferrer nofollow"
                 className="btn-xml"
-                title="XML + suara otomatis untuk Alight Motion"
+                title="Buka file XML asli"
               >
-                ⬇ Buka XML + Suara
+                ⬇ Buka XML
               </a>
             ) : (
               <span className="btn flex-1 !py-1.5 !text-[11px] !text-slate-400">XML —</span>

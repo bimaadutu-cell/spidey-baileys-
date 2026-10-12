@@ -346,6 +346,22 @@ async function runScanPreset(presetId: string, jobId?: string): Promise<ScanRepo
   const rows = await db.select().from(presets).where(eq(presets.id, presetId)).limit(1);
   const preset = rows[0];
   if (!preset) throw new Error("Preset tidak ditemukan");
+  if (preset.discoverySource === "user_upload") {
+    return {
+      presetId: preset.id,
+      tiktokId: preset.tiktokId,
+      overallStatus: preset.overallStatus,
+      xmlStatus: preset.xmlStatus,
+      fiveMbStatus: preset.fiveMbStatus,
+      confidence: preset.confidence,
+      xmlUrl: preset.xmlUrl,
+      fiveMbUrl: preset.fiveMbUrl,
+      xmlSource: preset.xmlSource,
+      fiveMbSource: preset.fiveMbSource,
+      nextRetryAt: preset.nextRetryAt?.toISOString() ?? null,
+      stages: [{ stage: "manual_upload", ok: true, message: "Unggahan manual tidak dipindai otomatis." }],
+    };
+  }
 
   const startedAt = new Date();
   // Mark SCANNING in the DB *and* in the live registry so the UI shows
