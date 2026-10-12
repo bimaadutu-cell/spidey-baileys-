@@ -207,11 +207,6 @@ export function HomeView({ initialQuery, favoritesOnly }: { initialQuery: string
       {/* ------------------------------------------ featured landscape video */}
       <section className="card-3d overflow-hidden rounded-[28px] p-4 sm:p-6">
         <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <span className="chip">GAMEPLAY · MODE LANDSCAPE</span>
-            <h2 className="mt-2 text-xl font-black text-white sm:text-2xl">Tonton menyamping</h2>
-            <p className="mt-1 text-xs text-slate-400">Video diputar 90° agar tampil horizontal seperti saat main Free Fire.</p>
-          </div>
           <a
             href="https://files.catbox.moe/kq2a4q.mp4"
             target="_blank"
@@ -226,9 +221,12 @@ export function HomeView({ initialQuery, favoritesOnly }: { initialQuery: string
           <video
             src="https://files.catbox.moe/kq2a4q.mp4"
             title="Video gameplay dalam orientasi landscape"
+            autoPlay
             controls
+            muted
+            loop
             playsInline
-            preload="metadata"
+            preload="auto"
             className="absolute left-1/2 top-1/2 max-w-none -translate-x-1/2 -translate-y-1/2 rotate-90 object-contain"
             style={{ width: "56.25%", height: "177.7778%" }}
           />
