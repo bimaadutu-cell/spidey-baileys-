@@ -32,7 +32,16 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="id">
+    <html lang="id" suppressHydrationWarning>
+      <head>
+        {/* Sesi yang sudah melihat splash tidak melihatnya lagi (jalan sebelum paint). */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "try{if(sessionStorage.getItem('ps_welcome')==='1')document.documentElement.setAttribute('data-welcomed','1')}catch(e){}",
+          }}
+        />
+      </head>
       <body className="antialiased">
         <WelcomeSplash />
         <PerfTuner />

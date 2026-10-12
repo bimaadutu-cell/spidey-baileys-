@@ -367,7 +367,13 @@ export function AccountPanel() {
                       );
                       return;
                     }
-                    setUploadMsg(data.message ?? data.error ?? (data.ok ? "Berhasil di-upload" : "Gagal upload"));
+                    setUploadMsg(
+                      data.ok
+                        ? uploadXml.trim() || uploadFive.trim()
+                          ? "Preset tersimpan dan langsung tampil di beranda ✓"
+                          : "Preset tersimpan. Tampil di beranda setelah link XML / 5MB ditemukan atau ditambahkan."
+                        : (data.message ?? data.error ?? "Gagal upload"),
+                    );
                     if (data.ok) {
                       setUploadTitle("");
                       setUploadXml("");

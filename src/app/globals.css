@@ -220,64 +220,102 @@ body {
   display: none !important;
 }
 
-/* Welcome splash — Garena Free Fire style */
+/* Welcome splash — "Selamat Datang" (opacity/transform only → smooth on 60/120Hz) */
+html[data-welcomed="1"] .welcome-splash {
+  display: none;
+}
 .welcome-splash {
   position: fixed;
   inset: 0;
   z-index: 9999;
   display: grid;
   place-items: center;
-  background:
-    radial-gradient(ellipse at center, #1a1208 0%, #07070a 70%),
-    #07070a;
-  animation: splash-out 0.55s ease-in 2.1s forwards;
-  pointer-events: none;
+  overflow: hidden;
+  background: radial-gradient(ellipse at center, #1a1208 0%, #07070a 72%), #07070a;
+  animation: splash-out 0.5s ease-in 2.5s forwards;
+  cursor: pointer;
+}
+.welcome-splash__glow {
+  position: absolute;
+  width: 70vmin;
+  height: 70vmin;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(255, 170, 60, 0.35), transparent 65%);
+  animation: splash-glow 2.4s ease-in-out infinite;
+  will-change: transform, opacity;
 }
 .welcome-splash__badge {
+  position: relative;
+  padding: 0 1.25rem;
   text-align: center;
-  animation: splash-in 0.55s cubic-bezier(0.2, 0.9, 0.2, 1) both;
+  animation: splash-in 0.6s cubic-bezier(0.2, 0.9, 0.2, 1) both;
+  will-change: transform, opacity;
 }
 .welcome-splash__mark {
   display: inline-grid;
   place-items: center;
-  width: 88px;
-  height: 88px;
-  margin: 0 auto 1rem;
-  border-radius: 22px;
+  width: 92px;
+  height: 92px;
+  margin: 0 auto 1.1rem;
+  border-radius: 24px;
   background: linear-gradient(145deg, #ffe08a, #ff8a2b);
   color: #1a1208;
-  font-size: 34px;
+  font-size: 36px;
   font-weight: 900;
-  box-shadow:
-    0 0 0 3px rgba(255, 211, 106, 0.35),
-    0 12px 40px rgba(255, 140, 40, 0.45);
+  box-shadow: 0 0 0 3px rgba(255, 211, 106, 0.35), 0 12px 40px rgba(255, 140, 40, 0.45);
 }
-.welcome-splash__title {
-  font-size: clamp(1.6rem, 5vw, 2.4rem);
+.welcome-splash__hello {
+  font-size: clamp(2rem, 9vw, 3.2rem);
   font-weight: 900;
-  letter-spacing: 0.08em;
+  line-height: 1.05;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   color: #fff;
-  text-shadow: 0 0 24px rgba(255, 211, 106, 0.45);
+  text-shadow: 0 0 28px rgba(255, 190, 80, 0.55);
+  animation: splash-rise 0.7s cubic-bezier(0.2, 0.9, 0.2, 1) 0.15s both;
+}
+.welcome-splash__title {
+  margin-top: 0.35rem;
+  font-size: clamp(1.1rem, 4.5vw, 1.6rem);
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #ffd36a;
+  animation: splash-rise 0.7s cubic-bezier(0.2, 0.9, 0.2, 1) 0.3s both;
 }
 .welcome-splash__sub {
-  margin-top: 0.4rem;
+  margin-top: 0.7rem;
   font-size: 12px;
   letter-spacing: 0.28em;
   text-transform: uppercase;
   color: var(--accent);
+  animation: splash-rise 0.7s ease 0.45s both;
 }
 .welcome-splash__bar {
-  width: 140px;
+  width: 150px;
   height: 3px;
-  margin: 1.1rem auto 0;
+  margin: 1.2rem auto 0;
   border-radius: 999px;
   background: linear-gradient(90deg, transparent, var(--accent), transparent);
   animation: bar-sweep 1.4s ease-in-out infinite;
 }
+.welcome-splash__by {
+  margin-top: 0.9rem;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  color: rgba(255, 255, 255, 0.55);
+}
 @keyframes splash-in {
-  from { opacity: 0; transform: scale(0.86) translateY(12px); }
+  from { opacity: 0; transform: scale(0.88) translateY(14px); }
   to { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes splash-rise {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes splash-glow {
+  0%, 100% { opacity: 0.55; transform: scale(0.92); }
+  50% { opacity: 1; transform: scale(1.06); }
 }
 @keyframes splash-out {
   to { opacity: 0; visibility: hidden; }
@@ -287,17 +325,27 @@ body {
   50% { opacity: 1; transform: scaleX(1); }
 }
 
-/* Reduce motion / low power */
+/* Smooth video: own compositor layer, no repaint of surrounding UI per frame */
+.video-smooth {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  will-change: transform;
+  contain: layout paint;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Reduce motion: keep the splash readable but static (the JS timer still removes it) */
 @media (prefers-reduced-motion: reduce) {
   .welcome-splash,
+  .welcome-splash__glow,
   .welcome-splash__badge,
+  .welcome-splash__hello,
+  .welcome-splash__title,
+  .welcome-splash__sub,
   .welcome-splash__bar,
   .live-dot,
   .skeleton {
     animation: none !important;
-  }
-  .welcome-splash {
-    display: none;
   }
 }
 

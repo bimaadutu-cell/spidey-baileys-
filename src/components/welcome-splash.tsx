@@ -2,33 +2,41 @@
 
 import { useEffect, useState } from "react";
 
-/** Free Fire–style welcome branding on first paint of a session. */
+/**
+ * Splash "Selamat Datang" — tampil sekali per sesi browser.
+ * - Dirender di HTML server (tidak menunggu hydration) supaya langsung terlihat.
+ * - Script kecil di <head> (layout.tsx) menandai sesi yang sudah pernah melihatnya,
+ *   sehingga pindah halaman / refresh tidak memunculkannya lagi.
+ * - Hanya animasi opacity/transform (GPU) agar tetap mulus di 60/120Hz.
+ * - Ketuk layar untuk melewati.
+ */
 export function WelcomeSplash() {
-  const [show, setShow] = useState(false);
+  const [gone, setGone] = useState(false);
 
   useEffect(() => {
     try {
-      if (sessionStorage.getItem("ps_welcome") === "1") return;
       sessionStorage.setItem("ps_welcome", "1");
-      setShow(true);
-      const t = window.setTimeout(() => setShow(false), 2700);
-      return () => window.clearTimeout(t);
     } catch {
-      setShow(true);
-      const t = window.setTimeout(() => setShow(false), 2700);
-      return () => window.clearTimeout(t);
+      /* storage diblokir — splash tetap hilang lewat timer */
     }
+    const t = window.setTimeout(() => setGone(true), 3000);
+    return () => window.clearTimeout(t);
   }, []);
 
-  if (!show) return null;
+  if (gone) return null;
 
   return (
-    <div className="welcome-splash" aria-hidden>
+    <div className="welcome-splash" role="status" aria-live="polite" onClick={() => setGone(true)}>
+      <div className="welcome-splash__glow" aria-hidden />
       <div className="welcome-splash__badge">
-        <div className="welcome-splash__mark">预</div>
-        <div className="welcome-splash__title">Preset Space</div>
+        <div className="welcome-splash__mark" aria-hidden>
+          预
+        </div>
+        <div className="welcome-splash__hello">Selamat Datang</div>
+        <div className="welcome-splash__title">di Preset Space</div>
         <div className="welcome-splash__sub">Find it · Preset it · Create it</div>
-        <div className="welcome-splash__bar" />
+        <div className="welcome-splash__bar" aria-hidden />
+        <div className="welcome-splash__by">by BimzOfficial ✓</div>
       </div>
     </div>
   );

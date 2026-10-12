@@ -172,14 +172,20 @@ export async function runDeepScanBatch(limit = 8, jobId?: string): Promise<DeepS
   const started = Date.now();
   const { scanPreset } = await import("./preset-store");
 
-  // Prefer presets that have never produced a verified link yet.
+  // Bimz never gives up: presets without any found link are scanned first and
+  // retried forever (spaced by nextRetryAt). Uploads are never re-scanned.
   const rows = await db
     .select({ id: presets.id, tiktokId: presets.tiktokId })
     .from(presets)
     .where(
-      sql`${presets.overallStatus} <> 'COMPLETE' and ${presets.scanAttempts} < 6`,
+      sql`${presets.overallStatus} <> 'COMPLETE'
+        and ${presets.discoverySource} is distinct from 'user_upload'
+        and (${presets.nextRetryAt} is null or ${presets.nextRetryAt} <= now())`,
     )
-    .orderBy(sql`${presets.scanAttempts} asc, ${presets.lastScannedAt} asc nulls first`)
+    .orderBy(
+      sql`(case when ${presets.xmlStatus} = 'FOUND' or ${presets.fiveMbStatus} = 'FOUND' then 1 else 0 end) asc`,
+      sql`${presets.lastScannedAt} asc nulls first`,
+    )
     .limit(Math.min(Math.max(limit, 1), 100));
 
   const report: DeepScanBatchReport = {

@@ -15,7 +15,6 @@ const FILTERS = [
   { value: "xml", label: "XML" },
   { value: "five-mb", label: "5MB" },
   { value: "complete", label: "XML + 5MB" },
-  { value: "pending", label: "Belum lengkap" },
 ];
 
 const SORTS = [
@@ -87,10 +86,15 @@ export function HomeView({ initialQuery, favoritesOnly }: { initialQuery: string
       }
     };
     void tick();
-    const timer = setInterval(() => void tick(), 30000);
+    const timer = setInterval(() => void tick(), 10000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void tick();
+    };
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
       alive = false;
       clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, [favoritesOnly]);
 
@@ -103,6 +107,24 @@ export function HomeView({ initialQuery, favoritesOnly }: { initialQuery: string
 
   return (
     <div className="space-y-8">
+      {/* ------------------------------------------------ selamat datang */}
+      <section className="card-3d rounded-[28px] p-5 sm:p-6">
+        <p className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Preset Space</p>
+        <h1 className="mt-1 text-2xl font-black leading-tight neon-text sm:text-3xl">
+          Selamat datang{user ? `, ${user.displayName}` : ""}! 👋
+        </h1>
+        <p className="mt-2 max-w-2xl text-sm text-slate-300">
+          Di sini hanya tampil preset yang <strong className="text-white">sudah ditemukan</strong> (XML / 5MB siap dibuka).
+          Bimz terus mencari sisanya di latar belakang — begitu ketemu, preset langsung muncul di beranda secara otomatis.
+        </p>
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+          <span className="chip !border-white/30 !bg-white/10 !text-white">{total} preset ditemukan</span>
+          <span className="flex items-center gap-1.5">
+            <span className="live-dot" /> Bimz scan otomatis aktif
+          </span>
+        </div>
+      </section>
+
       {/* ------------------------------------------------ featured video */}
       <section className="card-3d rounded-[28px] p-3 sm:p-5">
         <FeaturedPlayer src="https://files.catbox.moe/kq2a4q.mp4" title="Video unggulan" />
@@ -171,7 +193,7 @@ export function HomeView({ initialQuery, favoritesOnly }: { initialQuery: string
             className="w-40 rounded-full border border-white/12 bg-white/5 px-4 py-2 text-xs outline-none focus:border-white/35"
           />
           <span className="text-[11px] text-slate-500">
-            {items.length} dari {total} preset ditampilkan
+            {items.length} dari {total} preset ditemukan
           </span>
         </div>
       </section>
@@ -182,7 +204,7 @@ export function HomeView({ initialQuery, favoritesOnly }: { initialQuery: string
           onClick={applyNew}
           className="btn btn-primary fixed left-1/2 top-20 z-40 -translate-x-1/2 shadow-xl"
         >
-          ↑ {newCount} preset baru ditemukan
+          ↑ {newCount} preset baru ditemukan — ketuk untuk lihat
         </button>
       ) : null}
 
@@ -195,11 +217,11 @@ export function HomeView({ initialQuery, favoritesOnly }: { initialQuery: string
           <span className="flex items-center gap-2 text-[11px] text-slate-500">
             {scanningCount > 0 ? (
               <span className="chip !border-white/40 !bg-white/15 !text-white">
-                <span className="live-dot" /> {scanningCount} preset sedang di-scan
+                <span className="live-dot" /> Bimz sedang mencari {scanningCount} preset lagi
               </span>
             ) : (
               <span className="flex items-center gap-1.5">
-                <span className="live-dot" /> riset otomatis aktif
+                <span className="live-dot" /> Bimz terus mencari preset baru
               </span>
             )}
             {user ? null : "Anonim dibatasi (server-side)"}

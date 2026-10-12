@@ -10,9 +10,9 @@ import { runBulkHarvest, runDeepScanBatch } from "./bulk-harvest";
  *
  * Env:
  *   AUTO_SCAN_ENABLED      "false" to turn off (default on)
- *   AUTO_SCAN_INTERVAL_MIN minutes between rounds (default 30, min 5)
+ *   AUTO_SCAN_INTERVAL_MIN minutes between rounds (default 10, min 2)
  *   AUTO_SCAN_QUERIES      queries per round (default 40)
- *   AUTO_SCAN_DEEP         deep-scan batch size per round (default 10)
+ *   AUTO_SCAN_DEEP         deep-scan batch size per round (default 20)
  */
 const g = globalThis as unknown as { __autoScanStarted?: boolean; __autoScanRunning?: boolean };
 
@@ -30,7 +30,7 @@ export async function runAutoScanRound(): Promise<void> {
       perQuery: 40,
       includeCreators: true,
     });
-    const deep = await runDeepScanBatch(num("AUTO_SCAN_DEEP", 10, 0));
+    const deep = await runDeepScanBatch(num("AUTO_SCAN_DEEP", 20, 0));
     console.log(
       `[auto-scan] baru=${harvest.totalIngested} duplikat=${harvest.totalDuplicates} deep=${deep.scanned} xml=${deep.withXml}`,
     );
@@ -46,7 +46,7 @@ export function startAutoScan(): void {
   if ((process.env.AUTO_SCAN_ENABLED ?? "true").toLowerCase() === "false") return;
   g.__autoScanStarted = true;
 
-  const intervalMs = num("AUTO_SCAN_INTERVAL_MIN", 30, 5) * 60_000;
+  const intervalMs = num("AUTO_SCAN_INTERVAL_MIN", 10, 2) * 60_000;
   // first round shortly after boot, then on a fixed interval
   setTimeout(() => void runAutoScanRound(), 20_000);
   const timer = setInterval(() => void runAutoScanRound(), intervalMs);

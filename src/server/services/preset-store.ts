@@ -660,12 +660,27 @@ async function runScanPreset(presetId: string, jobId?: string): Promise<ScanRepo
   setScanPhase(presetId, "saving");
   await persistLinks(presetId, validated);
 
-  const result = statusFromCandidates(validated);
+  const scanned = statusFromCandidates(validated);
+  // Never downgrade: a link that was already found stays found even when this
+  // particular scan round (rate limit, flaky upstream) returned nothing.
+  const keptXml = !scanned.xml && preset.xmlStatus === "FOUND" && Boolean(preset.xmlUrl);
+  const keptFiveMb = !scanned.fiveMb && preset.fiveMbStatus === "FOUND" && Boolean(preset.fiveMbUrl);
+  const result = {
+    ...scanned,
+    xmlStatus: scanned.xml || keptXml ? "FOUND" : scanned.xmlStatus,
+    fiveMbStatus: scanned.fiveMb || keptFiveMb ? "FOUND" : scanned.fiveMbStatus,
+    confidence: Math.max(scanned.confidence, keptXml || keptFiveMb ? preset.confidence : 0),
+  };
+  const hasXml = result.xmlStatus === "FOUND";
+  const hasFiveMb = result.fiveMbStatus === "FOUND";
+  const foundNow = hasXml || hasFiveMb;
+  const wasFound = preset.xmlStatus === "FOUND" || preset.fiveMbStatus === "FOUND";
+
   const overallStatus = (() => {
-    if (result.xml && result.fiveMb) return "COMPLETE";
-    if (deep.status === "RATE_LIMITED" && !result.xml && !result.fiveMb) return "RETRY_PENDING";
-    if (result.xml) return "XML_FOUND";
-    if (result.fiveMb) return "FIVE_MB_FOUND";
+    if (hasXml && hasFiveMb) return "COMPLETE";
+    if (!foundNow && deep.status === "RATE_LIMITED") return "RETRY_PENDING";
+    if (hasXml) return "XML_FOUND";
+    if (hasFiveMb) return "FIVE_MB_FOUND";
     if (validated.length > 0) return "PARTIAL";
     if (resolverStatus === "MISSING_API_KEY" || stages.some((s) => !s.ok && s.stage === "metadata"))
       return "SOURCE_UNAVAILABLE";
@@ -675,14 +690,17 @@ async function runScanPreset(presetId: string, jobId?: string): Promise<ScanRepo
   // A rate-limited deep scan means the video was NEVER inspected. It must not
   // consume an attempt nor be presented as "tidak tersedia".
   const rateLimited = deep.status === "RATE_LIMITED";
-  const attempts = rateLimited ? preset.scanAttempts : preset.scanAttempts + 1;
+  // RESET: as soon as a link is found the retry state is wiped clean so the
+  // preset is a normal, finished entry on the homepage.
+  const attempts = foundNow ? 0 : rateLimited ? preset.scanAttempts : preset.scanAttempts + 1;
+  // Bimz never gives up: not-found presets are retried forever with a growing
+  // (capped) backoff. Only a COMPLETE preset stops being scanned.
+  const backoffMin = Math.min(config.scan.retryBackoffMinutes * Math.max(1, Math.min(attempts, 6)), 360);
   const nextRetryAt = rateLimited
     ? new Date(Date.now() + (deep.retryAfterMs ?? 60_000))
     : overallStatus === "COMPLETE"
       ? null
-      : attempts >= config.scan.maxPresetAttempts
-        ? null
-        : new Date(Date.now() + config.scan.retryBackoffMinutes * 60_000);
+      : new Date(Date.now() + (foundNow ? 24 * 60 : backoffMin) * 60_000);
 
   await db
     .update(presets)
@@ -698,13 +716,18 @@ async function runScanPreset(presetId: string, jobId?: string): Promise<ScanRepo
       scanAttempts: attempts,
       nextRetryAt,
       lastScannedAt: new Date(),
-      scanError:
-        validated.length === 0
+      scanError: foundNow
+        ? null
+        : validated.length === 0
           ? stages.filter((s) => !s.ok).map((s) => s.message).join(" | ").slice(0, 400) || null
           : null,
       updatedAt: new Date(),
     })
     .where(eq(presets.id, presetId));
+
+  if (foundNow && !wasFound) {
+    console.log(`[scan] preset ${preset.tiktokId} ditemukan -> otomatis tampil di beranda`);
+  }
 
   endScan(presetId);
 
@@ -906,7 +929,6 @@ export async function runRetryQueue(limit = 5): Promise<{ retried: number; resul
       and(
         inArray(presets.overallStatus, ["NEW", "RETRY_PENDING", "PARTIAL", "SOURCE_UNAVAILABLE"]),
         or(sql`${presets.nextRetryAt} is null`, sql`${presets.nextRetryAt} <= now()`),
-        sql`${presets.scanAttempts} < ${config.scan.maxPresetAttempts}`,
         // Never re-scan user uploads — links were configured at upload time
         sql`${presets.discoverySource} is distinct from 'user_upload'`,
       ),
@@ -1073,7 +1095,12 @@ export type ListFilters = {
   page?: number;
   limit?: number;
   ids?: string[];
+  /** Admin/internal only: include presets whose XML/5MB has not been found yet. */
+  includeUnfound?: boolean;
 };
+
+/** A preset is "ditemukan" once it has a real XML or 5MB link. */
+export const FOUND_CONDITION: SQL = sql`((${presets.xmlStatus} = 'FOUND' and ${presets.xmlUrl} is not null) or (${presets.fiveMbStatus} = 'FOUND' and ${presets.fiveMbUrl} is not null))`;
 
 /** Adds the streaming-gateway URLs so the browser never touches TikTok CDN directly. */
 export function withMediaGateway(item: PresetListItem): PresetListItem {
@@ -1092,6 +1119,9 @@ export async function listPresets(
   const limit = Math.min(Math.max(filters.limit ?? 12, 1), 48);
   const page = Math.max(filters.page ?? 1, 1);
   const conditions: SQL[] = [];
+  // Homepage rule: only presets that were actually found are shown. Unfound ones
+  // stay hidden while Bimz keeps scanning; they appear automatically once found.
+  if (!filters.includeUnfound) conditions.push(FOUND_CONDITION);
 
   if (filters.search) {
     const term = `%${filters.search.replace(/[%_]/g, "")}%`;
@@ -1121,7 +1151,9 @@ export async function listPresets(
       conditions.push(sql`${presets.publishedAt} < now() - interval '180 days'`);
       break;
     case "pending":
-      conditions.push(inArray(presets.overallStatus, ["NEW", "RETRY_PENDING", "PARTIAL", "SOURCE_UNAVAILABLE"]));
+      if (filters.includeUnfound) {
+        conditions.push(inArray(presets.overallStatus, ["NEW", "RETRY_PENDING", "PARTIAL", "SOURCE_UNAVAILABLE"]));
+      }
       break;
     default:
       break;
@@ -1252,6 +1284,7 @@ export async function categoryCounts(): Promise<{ slug: string; label: string; l
   const counts = await db
     .select({ categoryId: presets.categoryId, count: sql<number>`count(*)::int` })
     .from(presets)
+    .where(FOUND_CONDITION)
     .groupBy(presets.categoryId);
   const map = new Map(counts.map((c) => [c.categoryId, c.count]));
   return cats.map((c) => ({
