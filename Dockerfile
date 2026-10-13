@@ -28,7 +28,13 @@ COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/package.json ./package.json
-# Minimal pg install for db-push at boot
-RUN npm install --omit=dev pg@8.20.0
+# Everything `drizzle-kit push --force` needs at boot (config + schema + migrations)
+COPY --from=builder /app/drizzle.config.ts ./drizzle.config.ts
+COPY --from=builder /app/drizzle ./drizzle
+COPY --from=builder /app/src/db/schema.ts ./src/db/schema.ts
+# Env files are copied too so the live watcher can read edits made on a mounted volume
+COPY --from=builder /app/env* ./
+# drizzle-kit + pg + drizzle-orm for db-push at boot (standalone output does not ship them)
+RUN npm install --no-save --no-package-lock --omit=dev pg@8.20.0 drizzle-orm@0.45.2 drizzle-kit@0.31.10
 EXPOSE 3000
-CMD ["sh", "-c", "node scripts/db-push.mjs; node server.js"]
+CMD ["sh", "-c", "node scripts/db-push.mjs; exec node server.js"]

@@ -8,6 +8,15 @@ export async function register() {
 
   await import("./server/runtime-config");
 
+  // Live-reload env files (DATABASE_URL / NEON_DATABASE_URL) without a restart.
+  try {
+    const { startEnvWatcher } = await import("./server/env-watcher");
+    startEnvWatcher();
+    await import("./db");
+  } catch (error) {
+    console.error("[instrumentation] env watcher start failed:", error);
+  }
+
   try {
     const { autoStartWorker } = await import("./server/services/whatsapp-runtime");
     // Delay slightly so the HTTP server is listening before the socket opens.

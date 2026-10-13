@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { db, databaseTarget } from "@/db";
+import { db, getDatabaseTarget } from "@/db";
 import { config } from "@/server/config";
 import { databaseHealth, getBotStatus } from "@/server/services/chat";
 
@@ -45,7 +45,7 @@ export async function GET() {
         tables: tableCount,
         schemaReady: tableCount >= 10,
         schemaError,
-        provider: databaseTarget,
+        provider: getDatabaseTarget(),
       },
       services: {
         searchProviders: {

@@ -30,6 +30,8 @@ The project was rebuilt from zero; nothing was carried over from an older codeba
 | --- | --- | --- |
 | `DATABASE_URL` | ✅ | PostgreSQL connection (Neon: `postgresql://…?sslmode=require`) |
 | `NEON_DATABASE_URL` | recommended | Neon PostgreSQL URL; takes precedence over `DATABASE_URL` |
+| `DRIZZLE_PUSH_FORCE` | optional | `1` by default: `drizzle-kit push --force` runs automatically on start and whenever the DB URL changes. Set `0` to disable |
+| `DB_PUSH_STRICT` | optional | `1` = abort startup if the schema push fails (default: keep the site up and retry on next URL change) |
 | `UPLOAD_DIR` | optional | Directory on a persistent mounted volume for uploaded video files (default: `/data/uploads` when `/data` exists; otherwise `public/uploads`) |
 | `INTERNAL_TOKEN` | ✅ (bot) | Shared secret for `/api/internal/whatsapp` (server-to-server) |
 | `ANON_PRESET_LIMIT` | optional | Anonymous preset cap (default `10`, enforced server-side) |
@@ -44,6 +46,11 @@ The project was rebuilt from zero; nothing was carried over from an older codeba
 | `GLOBAL_CHAT_DISPLAY_NAME` | optional | `BimzOfficial ✓` |
 | `WHATSAPP_BOT_PHONE` | worker only | Number to pair (E.164, no `+`) |
 | `APP_URL` | worker only | Base URL of the website |
+
+**Live reload:** edit `NEON_DATABASE_URL` / `DATABASE_URL` in the `env` (or `.env`, `.env.local`)
+file while the server runs. `src/server/env-watcher.ts` detects the change within ~2 s,
+`src/db/index.ts` switches to a new connection pool, drains the old one and runs
+`scripts/db-push.mjs` against the new database automatically. Check `/api/health`.
 
 No secret is ever imported into a client component; only `NEXT_PUBLIC_*` values
 would be exposed and none are used.
