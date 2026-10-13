@@ -16,7 +16,11 @@ const rawNeon = (process.env.NEON_DATABASE_URL ?? "").trim();
 const rawStandard = (process.env.DATABASE_URL ?? "").trim();
 // Prefer the explicitly configured Neon URL. Never silently fall back to localhost
 // or a baked-in credential: that can make a deploy look healthy while using the wrong DB.
-const databaseUrl = rawNeon || rawStandard;
+// During `next build` (page-data collection) no runtime secrets exist. Use an inert
+// placeholder so the module can be imported; pg.Pool does not connect until a query runs.
+const isBuildPhase = process.env.NEXT_PHASE === "phase-production-build";
+const databaseUrl =
+  rawNeon || rawStandard || (isBuildPhase ? "postgresql://build:build@127.0.0.1:5432/build" : "");
 
 if (!databaseUrl) {
   throw new Error("Database belum dikonfigurasi. Isi NEON_DATABASE_URL (disarankan) atau DATABASE_URL di environment deployment.");
