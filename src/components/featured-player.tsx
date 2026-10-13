@@ -20,6 +20,9 @@ export function FeaturedPlayer({
   /** Degrees applied to a portrait file so it fills a landscape frame. Use -90 to keep the head at the top, 90 for the opposite direction, and 0 to disable. */
   rotation?: 0 | 90 | -90 | 180;
 }) {
+  // Locked orientation: the featured anime video must always rotate -90 degrees.
+  rotation = -90;
+
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [ratio, setRatio] = useState(16 / 9);

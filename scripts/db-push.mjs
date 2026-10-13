@@ -3,11 +3,27 @@
  * Uses DATABASE_URL / NEON_DATABASE_URL — no interactive drizzle-kit needed.
  */
 import pg from "pg";
+import { spawnSync } from "node:child_process";
 
 const url = (process.env.NEON_DATABASE_URL || process.env.DATABASE_URL || "").trim();
 if (!url) {
-  console.warn("[db-push] No DATABASE_URL — skip schema push");
-  process.exit(0);
+  console.error("[db-push] ERROR: set NEON_DATABASE_URL or DATABASE_URL in deployment variables.");
+  process.exit(1);
+}
+
+// Apply the complete Drizzle schema first (users, presets, sessions, and all
+// feature tables). The old script only created add-on tables and assumed the
+// core schema already existed, so a fresh Neon database could never boot.
+const migrationArgs = ["drizzle-kit", "push"];
+if (process.env.DRIZZLE_PUSH_FORCE === "1") migrationArgs.push("--force");
+const migration = spawnSync("npx", migrationArgs, {
+  stdio: "inherit",
+  env: process.env,
+  shell: process.platform === "win32",
+});
+if (migration.status !== 0) {
+  console.error("[db-push] Drizzle schema push failed; refusing to start with a partial database. If you reviewed the proposed data-loss changes, set DRIZZLE_PUSH_FORCE=1 explicitly.");
+  process.exit(migration.status ?? 1);
 }
 
 const client = new pg.Client({
@@ -73,6 +89,7 @@ try {
   console.log("[db-push] Schema OK (tables/columns ensured)");
 } catch (err) {
   console.error("[db-push] Failed:", err?.message || err);
+  process.exitCode = 1;
 } finally {
   try {
     await client.end();

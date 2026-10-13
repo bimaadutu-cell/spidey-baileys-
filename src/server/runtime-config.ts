@@ -1,20 +1,13 @@
 /**
- * Baked-in runtime defaults.
+ * Non-secret runtime defaults only.
  *
- * The hosting platform rewrites `.env` on every build, which previously wiped
- * the Neon connection string and the RestAPI Bimz keys. Real environment
- * variables ALWAYS win; these values only fill the gaps so the deployed app
- * keeps working after a platform-side reset.
- *
- * On Vercel set the same keys in Project → Settings → Environment Variables
- * and these defaults are simply ignored.
+ * Database credentials must be configured in the hosting platform environment;
+ * never bake a production connection string into source code or a build artifact.
  */
 
 type Defaults = Record<string, string>;
 
 const DEFAULTS: Defaults = {
-  NEON_DATABASE_URL:
-    "postgresql://neondb_owner:npg_eduq7oWQNpU5@ep-red-sun-b5lmeoxx-pooler.c-7.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require",
   INTERNAL_TOKEN: "spaceprs-internal-9f2c41a7b8d3e650",
   ANON_PRESET_LIMIT: "10",
   ADMIN_USERNAME: "bimzadmin",
@@ -38,12 +31,6 @@ const DEFAULTS: Defaults = {
   WA_SESSION_DIR: "./.spaceprs-session",
 };
 
-/** A platform-injected local Postgres URL must not shadow the real database. */
-function isPlaceholderDatabaseUrl(value: string | undefined): boolean {
-  if (!value) return true;
-  return /127\.0\.0\.1|localhost/.test(value);
-}
-
 let applied = false;
 
 export function applyRuntimeDefaults(): void {
@@ -57,10 +44,6 @@ export function applyRuntimeDefaults(): void {
     }
   }
 
-  // If only a placeholder DATABASE_URL exists, point it at the real database.
-  if (isPlaceholderDatabaseUrl(process.env.DATABASE_URL) && process.env.NEON_DATABASE_URL) {
-    process.env.DATABASE_URL = process.env.NEON_DATABASE_URL;
-  }
 }
 
 applyRuntimeDefaults();

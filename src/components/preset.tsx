@@ -240,7 +240,7 @@ export function PresetCard({ preset, compact = false }: { preset: PresetItem; co
               <span className="btn flex-1 !py-1.5 !text-[11px] !text-slate-400">XML —</span>
             )}
             {preset.fiveMbUrl ? (
-              <a href={preset.fiveMbUrl} target="_blank" rel="noopener noreferrer nofollow" className="btn-5mb">
+              <a href={`/api/preset/${preset.id}/5mb`} target="_blank" rel="noopener noreferrer nofollow" className="btn-5mb">
                 ⬇ Buka 5MB
               </a>
             ) : (

@@ -342,7 +342,7 @@ function FeedItem({
           <div className="pointer-events-auto mt-2 flex flex-wrap gap-2">
             <Link href={`/preset/${preset.id}`} className="btn !py-1.5 !text-[11px]">Detail preset</Link>
             {preset.xmlUrl ? (
-              <a href={preset.xmlUrl} target="_blank" rel="noopener noreferrer nofollow" className="btn btn-primary !py-1.5 !text-[11px]">
+              <a href={`/api/preset/${preset.id}/xml`} target="_blank" rel="noopener noreferrer nofollow" className="btn btn-primary !py-1.5 !text-[11px]">
                 Ambil XML
               </a>
             ) : null}

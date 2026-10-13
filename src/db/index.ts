@@ -14,12 +14,21 @@ import { Pool } from "pg";
  */
 const rawNeon = (process.env.NEON_DATABASE_URL ?? "").trim();
 const rawStandard = (process.env.DATABASE_URL ?? "").trim();
-// A platform-injected localhost URL must never shadow the real Neon database.
-const isLocal = /127\.0\.0\.1|localhost/.test(rawStandard);
-const databaseUrl = rawNeon || (isLocal ? "" : rawStandard) || rawStandard;
+// Prefer the explicitly configured Neon URL. Never silently fall back to localhost
+// or a baked-in credential: that can make a deploy look healthy while using the wrong DB.
+const databaseUrl = rawNeon || rawStandard;
 
 if (!databaseUrl) {
-  throw new Error("NEON_DATABASE_URL or DATABASE_URL is required");
+  throw new Error("Database belum dikonfigurasi. Isi NEON_DATABASE_URL (disarankan) atau DATABASE_URL di environment deployment.");
+}
+
+try {
+  const parsed = new URL(databaseUrl);
+  if (!["postgres:", "postgresql:"].includes(parsed.protocol)) {
+    throw new Error("protocol");
+  }
+} catch {
+  throw new Error("NEON_DATABASE_URL/DATABASE_URL bukan URL PostgreSQL yang valid.");
 }
 
 const isNeon = /neon\.tech/i.test(databaseUrl);
@@ -38,7 +47,7 @@ export const pool =
     idleTimeoutMillis: isNeon ? 10_000 : 30_000,
     connectionTimeoutMillis: 15_000,
     keepAlive: true,
-    ...(isNeon ? { ssl: { rejectUnauthorized: false } } : {}),
+    ...(isNeon || /sslmode=require/i.test(databaseUrl) ? { ssl: { rejectUnauthorized: false } } : {}),
   });
 
 pool.on("error", (error) => {
