@@ -3,7 +3,9 @@ import path from "node:path";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { botRuntime } from "@/db/schema";
+import { config } from "../config";
 import { getBotConfig, ingestWhatsAppMessage, upsertBotRuntime } from "./chat";
+import { evaluateDeveloperMessage, rememberSentMessage } from "./wa-gate";
 import { claimDeliveries, markDelivery } from "./reviews";
 import { renderReviewImage } from "./review-image";
 
@@ -201,19 +203,6 @@ function textOf(message: Record<string, unknown> | null | undefined): string {
   return "";
 }
 
-/** Outbound bot templates must never re-enter Global Chat as "developer" messages. */
-function isBotSystemOutbound(body: string): boolean {
-  const t = body.trim();
-  return (
-    /^🛠️\s*\*?LAPORAN/i.test(t) ||
-    /^\*?LAPORAN KENDALA/i.test(t) ||
-    /^🔔\s*\*?Private Ping/i.test(t) ||
-    /^💬\s*\*?Global Chat/i.test(t) ||
-    /预设空间\s*\|\s*Preset Space/i.test(t) ||
-    /^Balas dengan:\s*#balas/i.test(t)
-  );
-}
-
 /** Delivers queued support tickets to the developer. */
 async function pumpTickets(): Promise<void> {
   if (waState.status !== "connected" || !waState.sock) return;
@@ -263,12 +252,13 @@ async function pumpDeliveries(): Promise<void> {
           createdAt: task.review.createdAt,
         });
         const jid = `${task.target.replace(/\D/g, "")}@s.whatsapp.net`;
-        await waState.sock.sendMessage(jid, {
+        const sentImage = await waState.sock.sendMessage(jid, {
           image: png,
           caption:
             `预设空间 | Preset Space — NEW WEBSITE REVIEW\n` +
             `${task.review.username} · ${"★".repeat(task.review.rating)}\n\n${task.review.body}`,
         });
+        rememberSentMessage((sentImage as { key?: { id?: string } } | undefined)?.key?.id);
         await markDelivery(task.id, "sent");
         log("info", `Ulasan ${task.reviewId} terkirim ke ${task.target}`);
       } catch (error) {
@@ -429,39 +419,84 @@ async function connectSocket(options?: ConnectOptions): Promise<{ pairingCode: s
   });
 
   // Developer's normal WhatsApp messages -> Global Chat (no command needed).
+  // STRICT: only the private chat with the developer number is ever accepted
+  // (see wa-gate.ts). Groups, other people, other chats of the developer's phone,
+  // history replays and the bot's own echoes are all dropped.
   sock.ev.on("messages.upsert", (payload: unknown) => {
     const batch = payload as {
+      type?: string;
       messages?: {
-        key?: { id?: string; remoteJid?: string; fromMe?: boolean };
+        key?: {
+          id?: string;
+          remoteJid?: string;
+          fromMe?: boolean;
+          remoteJidAlt?: string;
+          participantAlt?: string;
+          senderPn?: string;
+          participantPn?: string;
+        };
         message?: Record<string, unknown>;
         pushName?: string;
+        messageTimestamp?: number | { toNumber?: () => number; low?: number } | string;
       }[];
     };
     void (async () => {
+      const botCfg = await getBotConfig();
+      const developerNumbers = [botCfg.targetNumber, config.whatsapp.developerNumber].filter(Boolean);
+      const botPhone = (waState.phone ?? (sock.user?.id ?? "").split(":")[0] ?? "").replace(/\D/g, "");
+
       for (const message of batch.messages ?? []) {
         const body = textOf(message.message);
         if (!body) continue;
-        const jid = message.key?.remoteJid ?? null;
-        if (!jid || jid.endsWith("@broadcast") || jid === "status@broadcast") continue;
+        const key = message.key ?? {};
+        const jid = key.remoteJid ?? null;
+        const fromMe = Boolean(key.fromMe);
 
-        const fromMe = Boolean(message.key?.fromMe);
+        // Alternate phone-number JIDs (needed when WhatsApp delivers @lid chats).
+        const altJids: string[] = [key.remoteJidAlt, key.participantAlt, key.senderPn, key.participantPn].filter(
+          (x): x is string => Boolean(x),
+        );
+        if (jid?.endsWith("@lid")) {
+          try {
+            const mapping = (sock as unknown as {
+              signalRepository?: { lidMapping?: { getPNForLID?: (lid: string) => Promise<string | null | undefined> } };
+            }).signalRepository?.lidMapping;
+            const pn = await mapping?.getPNForLID?.(jid);
+            if (pn) altJids.push(pn.includes("@") ? pn : `${pn}@s.whatsapp.net`);
+          } catch {
+            /* mapping unavailable: other alternates may still resolve it */
+          }
+        }
 
-        // Never re-ingest bot's own outbound system messages into Global Chat.
-        if (fromMe && isBotSystemOutbound(body)) {
-          log("info", `Skip outbound sistem bot: ${body.slice(0, 40)}`);
+        const rawTs = message.messageTimestamp;
+        const timestamp =
+          typeof rawTs === "number"
+            ? rawTs
+            : typeof rawTs === "string"
+              ? Number(rawTs)
+              : rawTs && typeof rawTs === "object"
+                ? (rawTs.toNumber?.() ?? rawTs.low ?? null)
+                : null;
+
+        const gate = evaluateDeveloperMessage({
+          remoteJid: jid,
+          altJids,
+          fromMe,
+          messageId: key.id ?? null,
+          timestamp,
+          body,
+          botPhone,
+          developerNumbers,
+        });
+        if (!gate.ok) {
+          // Only log the interesting rejections (not every group message).
+          if (!/grup|broadcast|channel|template|kiriman bot|mirror/i.test(gate.reason)) {
+            log("info", `Pesan WA ditolak: ${gate.reason}`);
+          }
           continue;
         }
 
-        // Resolve sender phone:
-        // - Incoming (developer → bot): remoteJid is the developer (or @lid)
-        // - fromMe on bot device: only accept if paired phone IS the developer number
-        const participant =
-          (message.key as { participant?: string })?.participant ??
-          (message as { participant?: string }).participant ??
-          null;
-        const senderJid = !fromMe ? (participant || jid) : `${(waState.phone ?? "").replace(/\D/g, "")}@s.whatsapp.net`;
-
-        // "#balas <ticketId> <text>" answers a support ticket (developer only).
+        // "#balas <ticketId> <text>" answers a support ticket (developer chat only).
         const replyMatch = body.match(/^#balas\s+([0-9a-f-]{8,36})\s+([\s\S]+)$/i);
         if (replyMatch) {
           try {
@@ -469,7 +504,7 @@ async function connectSocket(options?: ConnectOptions): Promise<{ pairingCode: s
             const result = await addDeveloperReply({
               ticketRef: replyMatch[1]!,
               body: replyMatch[2]!.trim(),
-              whatsappId: message.key?.id ?? null,
+              whatsappId: key.id ?? null,
             });
             log(result.ok ? "info" : "warn", `Balasan tiket: ${result.message}`);
           } catch (error) {
@@ -478,55 +513,19 @@ async function connectSocket(options?: ConnectOptions): Promise<{ pairingCode: s
           continue;
         }
 
-        // Baileys may deliver @lid — also read alternate phone JIDs from the key.
-        const keyAny = message.key as {
-          remoteJid?: string;
-          remoteJidAlt?: string;
-          participant?: string;
-          participantAlt?: string;
-          senderPn?: string;
-          participantPn?: string;
-        };
-        const extraJids = [
-          keyAny.remoteJidAlt,
-          keyAny.participantAlt,
-          keyAny.senderPn,
-          keyAny.participantPn,
-          keyAny.remoteJid,
-          keyAny.participant,
-          // If the only 1:1 peer is the developer phone, remoteJid is still useful
-          jid,
-        ].filter((x): x is string => Boolean(x));
-
+        const developerJid = `${gate.chatDigits}@s.whatsapp.net`;
         const result = await ingestWhatsAppMessage({
-          clientKey: message.key?.id ?? `${Date.now()}-${Math.random()}`,
-          jid: senderJid,
+          clientKey: key.id ?? `${Date.now()}-${Math.random()}`,
+          jid: developerJid,
           body,
           pushName: message.pushName ?? null,
           fromMe,
-          extraJids,
+          extraJids: [developerJid],
         });
-        if (result.inserted) {
-          log("info", `Pesan developer masuk Global Chat: ${body.slice(0, 48)}`);
-        } else if (result.reason?.includes("JID bukan developer") && !fromMe && jid && !jid.endsWith("@g.us")) {
-          // LID / alternate-id fallback: private incoming chat → attribute to configured developer number
-          const cfg = await getBotConfig();
-          const forced = `${(cfg.targetNumber || "6283115955196").replace(/\D/g, "")}@s.whatsapp.net`;
-          const retry = await ingestWhatsAppMessage({
-            clientKey: message.key?.id ? `${message.key.id}-dev` : `${Date.now()}-dev`,
-            jid: forced,
-            body,
-            pushName: message.pushName ?? null,
-            fromMe: false,
-            extraJids: [forced, "6283115955196"],
-          });
-          if (retry.inserted) log("info", `Pesan developer (LID fallback) masuk Global Chat: ${body.slice(0, 48)}`);
-          else log("info", `Pesan WA dilewati: ${result.reason}`);
-        } else if (result.reason) {
-          log("info", `Pesan WA dilewati: ${result.reason}`);
-        }
+        if (result.inserted) log("info", `Pesan developer masuk Global Chat: ${body.slice(0, 48)}`);
+        else if (result.reason) log("info", `Pesan WA dilewati: ${result.reason}`);
       }
-    })();
+    })().catch((error) => log("error", `Handler pesan WA error: ${error instanceof Error ? error.message : "unknown"}`));
   });
 
   const creds = (authState as { creds?: { registered?: boolean } }).creds;
@@ -697,7 +696,8 @@ export async function sendWhatsAppText(toNumber: string, text: string): Promise<
   }
   try {
     const jid = `${toNumber.replace(/\D/g, "")}@s.whatsapp.net`;
-    await waState.sock.sendMessage(jid, { text });
+    const sent = await waState.sock.sendMessage(jid, { text });
+    rememberSentMessage((sent as { key?: { id?: string } } | undefined)?.key?.id);
     return { ok: true };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message.slice(0, 160) : "gagal kirim" };

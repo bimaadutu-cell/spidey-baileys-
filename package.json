@@ -4,7 +4,7 @@
   "scripts": {
     "dev": "node scripts/db-push.mjs && next dev",
     "prebuild": "node -e \"const fs=require('fs'); for (const p of ['src/app/layout.tsx','src/app/shell.tsx','src/app/perf.tsx']) { if (!fs.existsSync(p)) { console.error('MISSING '+p); process.exit(1);} } console.log('prebuild ok');\"",
-    "build": "next build --webpack",
+    "build": "node scripts/db-push.mjs && next build --webpack",
     "start": "node scripts/db-push.mjs && next start",
     "start:next": "next start",
     "lint": "eslint .",

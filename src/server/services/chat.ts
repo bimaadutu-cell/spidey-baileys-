@@ -5,6 +5,7 @@ import { db } from "@/db";
 import { botRuntime, globalChatMessages, type ChatMessage } from "@/db/schema";
 import { config } from "../config";
 import { sanitizeText } from "../http";
+import { normalizePhone, samePhone } from "./wa-gate";
 
 const HEARTBEAT_FRESH_MS = 120_000;
 
@@ -99,22 +100,13 @@ function digitsOf(value: string | null | undefined): string {
 }
 
 function phonesMatch(a: string, b: string): boolean {
-  if (!a || !b) return false;
-  if (a === b) return true;
-  // country-code / leading-zero variants (e.g. 0831… vs 62831…)
-  if (a.length >= 9 && b.length >= 9 && (a.endsWith(b) || b.endsWith(a))) return true;
-  return false;
+  return samePhone(a, b);
 }
 
-/** Hardcoded + configured developer numbers (always allow these). */
+/** Configured developer numbers only (panel target + WHATSAPP_DEVELOPER_NUMBER). */
 function developerTargets(cfg: { targetNumber: string }): string[] {
-  const list = [
-    cfg.targetNumber,
-    config.whatsapp.developerNumber,
-    "6283115955196",
-    "083115955196",
-  ];
-  return [...new Set(list.map((n) => (n || "").replace(/\D/g, "")).filter((n) => n.length >= 8))];
+  const list = [cfg.targetNumber, config.whatsapp.developerNumber];
+  return [...new Set(list.map((n) => normalizePhone(n)).filter((n) => n.length >= 8))];
 }
 
 function developerIdentityFor(
@@ -148,10 +140,14 @@ export async function ingestWhatsAppMessage(input: {
   if (!botConfig.globalChatEnabled) {
     return { inserted: false, reason: "Global Chat dimatikan dari panel admin" };
   }
+  // Messages typed on the paired phone (fromMe) only count when that phone IS the developer's.
+  if (input.fromMe && !samePhone(botConfig.botNumber, botConfig.targetNumber)) {
+    return { inserted: false, reason: "Pesan keluar dari bot (fromMe) diabaikan" };
+  }
   const identity = developerIdentityFor(input.jid, botConfig, input.extraJids ?? []);
   if (!identity.isDeveloper) {
     const seen = [input.jid, ...(input.extraJids ?? [])].filter(Boolean).join(" | ");
-    return { inserted: false, reason: `JID bukan developer (${seen || "empty"}) — target ${botConfig.targetNumber || "6283115955196"}` };
+    return { inserted: false, reason: `JID bukan developer (${seen || "empty"}) — target ${botConfig.targetNumber || config.whatsapp.developerNumber}` };
   }
   const body = sanitizeText(input.body, 1200);
   if (!body) return { inserted: false, reason: "Pesan kosong" };

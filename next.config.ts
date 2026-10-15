@@ -24,6 +24,11 @@ const nextConfig: NextConfig = {
   experimental: {
     proxyTimeout: 120_000,
   },
+  // The schema installer (scripts/db-push.mjs + drizzle/*.sql) must exist at runtime
+  // so tables are created on first boot even on serverless / standalone bundles.
+  outputFileTracingIncludes: {
+    "/**": ["./drizzle/**/*", "./scripts/db-push.mjs", "./drizzle.config.ts", "./src/db/schema.ts"],
+  },
   // Never let a CDN cache API/streaming responses.
   headers: async () => [
     {

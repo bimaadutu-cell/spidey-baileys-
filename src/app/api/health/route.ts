@@ -26,6 +26,10 @@ export async function GET() {
         sql`select count(*)::int as n from information_schema.tables where table_schema = 'spaceprs'`,
       );
       tableCount = Number(result.rows[0]?.n ?? 0);
+      if (tableCount < 23) {
+        // Self-heal: kick off the installer in the background; the next probe will see the tables.
+        void import("@/server/schema-bootstrap").then((m) => m.ensureSchema("health")).catch(() => undefined);
+      }
     } catch (error) {
       schemaError = error instanceof Error ? error.message.slice(0, 200) : "unknown";
     }

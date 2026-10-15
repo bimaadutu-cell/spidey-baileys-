@@ -17,6 +17,14 @@ export async function register() {
     console.error("[instrumentation] env watcher start failed:", error);
   }
 
+  // Make sure EVERY table exists right after a deploy (no manual drizzle step).
+  try {
+    const { ensureSchema } = await import("./server/schema-bootstrap");
+    setTimeout(() => void ensureSchema("boot").catch((e) => console.error("[schema] ensure failed:", e)), 1500);
+  } catch (error) {
+    console.error("[instrumentation] schema bootstrap failed:", error);
+  }
+
   try {
     const { autoStartWorker } = await import("./server/services/whatsapp-runtime");
     // Delay slightly so the HTTP server is listening before the socket opens.

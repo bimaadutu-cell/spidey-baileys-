@@ -144,11 +144,12 @@ async function deliverPending() {
         const buffer = Buffer.from(await imageRes.arrayBuffer());
 
         const jid = `${task.target.replace(/\D/g, "")}@s.whatsapp.net`;
-        await state.sock.sendMessage(jid, {
+        const sentMsg = await state.sock.sendMessage(jid, {
           image: buffer,
           caption: `预设空间 | Preset Space — NEW WEBSITE REVIEW\n${task.review.username} · ${"★".repeat(task.review.rating)}\n\n${task.review.body}`,
         });
 
+        if (sentMsg?.key?.id) (state.sentIds ??= new Set()).add(sentMsg.key.id);
         state.delivered.add(task.idempotencyKey);
         await api("/api/internal/whatsapp", {
           method: "POST",
@@ -234,28 +235,51 @@ async function connect() {
     }
   });
 
-  // Global Chat: developer's normal WhatsApp messages → website (no commands needed).
-  sock.ev.on("messages.upsert", async ({ messages, type }) => {
-    if (type !== "notify" && type !== "append") return;
-    const allowed = developerJids();
+  // Global Chat: ONLY the private chat with the developer number is forwarded.
+  // Groups, other contacts, other chats on the developer's phone, history replays
+  // and the bot's own outbound messages are all ignored.
+  const normPhone = (value) => {
+    let d = String(value ?? "").split("@")[0].split(":")[0].replace(/\D/g, "");
+    if (d.startsWith("00")) d = d.slice(2);
+    if (d.startsWith("0")) d = `62${d.slice(1)}`;
+    else if (d.startsWith("8") && d.length >= 9 && d.length <= 12) d = `62${d}`;
+    return d;
+  };
+  const isTemplate = (t) =>
+    /^🛠️\s*\*?LAPORAN/i.test(t) || /^🔔\s*\*?Private Ping/i.test(t) || /^💬\s*\*?Global Chat/i.test(t) ||
+    /预设空间\s*\|\s*Preset Space/i.test(t) || /^Balas dengan:\s*#balas/i.test(t);
+  const sentIds = (state.sentIds ??= new Set());
+
+  sock.ev.on("messages.upsert", async ({ messages }) => {
+    const developers = new Set([DELIVERY_TARGET, process.env.WHATSAPP_DEVELOPER_NUMBER].map(normPhone).filter(Boolean));
+    const botPhone = normPhone(state.phone ?? PHONE);
+    const botIsDeveloper = developers.has(botPhone);
     for (const message of messages) {
       const body = extractText(message.message);
       if (!body) continue;
-      const jid = message.key?.remoteJid ?? null;
-      const fromMe = Boolean(message.key?.fromMe);
-      const normalized = (jid ?? "").replace(/[^0-9]/g, "");
-      const isDeveloper = allowed.has(jid) || (PHONE && normalized === PHONE);
-      if (!isDeveloper) continue; // never forward other participants
-      if (jid?.endsWith("@broadcast") || jid?.endsWith("status@broadcast")) continue;
-      if (jid?.endsWith("@g.us") && !allowed.has(jid)) continue;
+      const key = message.key ?? {};
+      const jid = key.remoteJid ?? "";
+      const fromMe = Boolean(key.fromMe);
+
+      if (!(jid.endsWith("@s.whatsapp.net") || jid.endsWith("@lid"))) continue; // no groups/status/channels
+      if (key.id && sentIds.has(key.id)) continue; // our own echo
+      if (isTemplate(body.trim())) continue;
+      const ts = Number(message.messageTimestamp?.low ?? message.messageTimestamp ?? 0);
+      if (ts && Date.now() / 1000 - ts > 180) continue; // offline history replay
+
+      const alt = [key.remoteJidAlt, key.senderPn, key.participantPn].find((j) => j && j.endsWith("@s.whatsapp.net"));
+      const chat = normPhone(jid.endsWith("@lid") ? alt : jid);
+      if (!chat || !developers.has(chat)) continue; // not the developer's chat
+      if (fromMe && !(botIsDeveloper && chat === botPhone)) continue; // only self-chat when bot == developer
+      if (!fromMe && botIsDeveloper && chat === botPhone) continue; // mirror of our own self-chat
 
       try {
         const { json } = await api("/api/internal/whatsapp", {
           method: "POST",
           body: JSON.stringify({
             action: "ingest_message",
-            messageId: message.key?.id ?? `${Date.now()}-${Math.random()}`,
-            jid,
+            messageId: key.id ?? `${Date.now()}-${Math.random()}`,
+            jid: `${chat}@s.whatsapp.net`,
             body,
             fromMe,
             pushName: message.pushName ?? null,

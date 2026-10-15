@@ -30,6 +30,7 @@ The project was rebuilt from zero; nothing was carried over from an older codeba
 | --- | --- | --- |
 | `DATABASE_URL` | ✅ | PostgreSQL connection (Neon: `postgresql://…?sslmode=require`) |
 | `NEON_DATABASE_URL` | recommended | Neon PostgreSQL URL; takes precedence over `DATABASE_URL` |
+| `AUTO_SCAN_FAST_SEC` / `AUTO_SCAN_FAST_BATCH` / `DEEP_SCAN_CONCURRENCY` | optional | Real-time scan tuning: fast lane period (15 s), batch per tick (8), parallel workers (4) |
 | `DRIZZLE_PUSH_FORCE` | optional | `1` by default: `drizzle-kit push --force` runs automatically on start and whenever the DB URL changes. Set `0` to disable |
 | `DB_PUSH_STRICT` | optional | `1` = abort startup if the schema push fails (default: keep the site up and retry on next URL change) |
 | `UPLOAD_DIR` | optional | Directory on a persistent mounted volume for uploaded video files (default: `/data/uploads` when `/data` exists; otherwise `public/uploads`) |
@@ -168,3 +169,13 @@ Server menjalankan riset sendiri di background (tanpa cron). Preset baru langsun
 Set `NEON_DATABASE_URL` in the deployment platform's environment variables to the current Neon connection string (prefer the Neon pooled connection string for runtime). Do not commit the URL to source control. The deployment startup runs `drizzle-kit push` before starting Next.js; a migration failure stops startup instead of silently serving an app with missing tables. For a reviewed schema change that explicitly requires accepting data-loss prompts, set `DRIZZLE_PUSH_FORCE=1` only after backing up the database. Check `/api/health` after deploy to confirm database connectivity and schema readiness.
 
 If a database password was ever pasted into a chat, issue a new password/connection string in Neon and update the deployment variable before redeploying.
+
+
+## Global Chat (developer only)
+Only the **private chat with the developer number** (`WHATSAPP_DEVELOPER_NUMBER` / panel target) reaches Global Chat.
+Groups, other contacts, other chats on the developer's phone, old history and the bot's own messages are ignored
+(`src/server/services/wa-gate.ts`). `#balas` ticket replies obey the same rule.
+
+## Tables on deploy
+`npm run build` and every start run `scripts/db-push.mjs`; the server also re-checks at boot and from `/api/health`
+and installs any missing table automatically.

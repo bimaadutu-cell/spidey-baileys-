@@ -45,7 +45,7 @@ function buildState(url: string, generation: number): DbState {
     connectionString: url,
     // Neon's pooler terminates idle connections; keep the pool small and
     // resilient so serverless invocations never reuse a dead socket.
-    max: isNeon ? 5 : 10,
+    max: isNeon ? 10 : 15,
     idleTimeoutMillis: isNeon ? 10_000 : 30_000,
     connectionTimeoutMillis: 15_000,
     keepAlive: true,

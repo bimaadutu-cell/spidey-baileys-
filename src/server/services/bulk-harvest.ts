@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { presets, scanAttempts, scanJobs } from "@/db/schema";
 import { PRESET_HASHTAGS, PRESET_KEYWORDS, PRESET_CREATORS } from "./discovery-keywords";
@@ -54,48 +54,68 @@ export async function runBulkHarvest(options: {
     providerMessages: [],
   };
 
-  for (const query of capped) {
+  // Queries run in parallel (bounded) — the upstream index is the slow part, not our DB.
+  const concurrency = Math.min(Math.max(Number(process.env.BULK_HARVEST_CONCURRENCY ?? 4), 1), 8);
+  const perQueryResults: HarvestReport["queries"][number][] = new Array(capped.length);
+  let cursor = 0;
+
+  const runOne = async (query: string, slot: number) => {
     const result = await bimzSearch(query, perQuery);
     report.queriesRun += 1;
     if (!result.ok) {
       if (!report.providerMessages.includes(result.message)) report.providerMessages.push(result.message);
-      report.queries.push({ query, found: 0, ingested: 0, duplicates: 0 });
-      continue;
+      perQueryResults[slot] = { query, found: 0, ingested: 0, duplicates: 0 };
+      return;
     }
 
     const unique = dedupeVideos(result.videos);
-    let ingested = 0;
-    let duplicates = 0;
+    // ONE query tells us which videos already exist (was: one SELECT per video).
+    const ids = unique.map((video) => video.tiktokId);
+    const existingRows = ids.length
+      ? await db.select({ tiktokId: presets.tiktokId }).from(presets).where(inArray(presets.tiktokId, ids))
+      : [];
+    const known = new Set(existingRows.map((row) => row.tiktokId));
+    const duplicates = unique.filter((video) => known.has(video.tiktokId)).length;
+    const ingested = unique.length - duplicates;
 
-    for (const video of unique) {
-      const existing = await db
-        .select({ id: presets.id })
-        .from(presets)
-        .where(eq(presets.tiktokId, video.tiktokId))
-        .limit(1);
-      if (existing[0]) {
-        duplicates += 1;
-        await upsertVideo(video, "bimz_harvest"); // refresh live media URL + stats
-        continue;
-      }
-      await upsertVideo(video, "bimz_harvest");
-      ingested += 1;
+    // Upsert in small parallel groups (also refreshes live media URL + stats of known rows).
+    for (let i = 0; i < unique.length; i += 6) {
+      await Promise.all(unique.slice(i, i + 6).map((video) => upsertVideo(video, "bimz_harvest").catch(() => undefined)));
     }
 
     report.totalFound += unique.length;
     report.totalIngested += ingested;
     report.totalDuplicates += duplicates;
-    report.queries.push({ query, found: unique.length, ingested, duplicates });
+    perQueryResults[slot] = { query, found: unique.length, ingested, duplicates };
 
-    await db.insert(scanAttempts).values({
-      jobId: options.jobId ?? null,
-      stage: "bulk_harvest",
-      provider: "restapi-bimz",
-      ok: true,
-      message: `"${query}": ${unique.length} video, ${ingested} baru, ${duplicates} duplikat`,
-      evidence: { query, found: unique.length, ingested, duplicates },
-    });
-  }
+    await db
+      .insert(scanAttempts)
+      .values({
+        jobId: options.jobId ?? null,
+        stage: "bulk_harvest",
+        provider: "restapi-bimz",
+        ok: true,
+        message: `"${query}": ${unique.length} video, ${ingested} baru, ${duplicates} duplikat`,
+        evidence: { query, found: unique.length, ingested, duplicates },
+      })
+      .catch(() => undefined);
+  };
+
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, capped.length) }, async () => {
+      while (cursor < capped.length) {
+        const slot = cursor++;
+        try {
+          await runOne(capped[slot]!, slot);
+        } catch (error) {
+          perQueryResults[slot] = { query: capped[slot]!, found: 0, ingested: 0, duplicates: 0 };
+          const message = error instanceof Error ? error.message.slice(0, 120) : "harvest error";
+          if (!report.providerMessages.includes(message)) report.providerMessages.push(message);
+        }
+      }
+    }),
+  );
+  report.queries.push(...perQueryResults.filter(Boolean));
 
   return report;
 }
@@ -168,6 +188,19 @@ export type DeepScanBatchReport = {
   details: { tiktokId: string; status: string; xml: number; packages: number; message: string }[];
 };
 
+/** Sequential background queue: archiving big videos must never block scanning. */
+let archiveChain: Promise<unknown> = Promise.resolve();
+function queueArchive(presetId: string, tiktokId: string): void {
+  archiveChain = archiveChain
+    .then(async () => {
+      const { resolvePlayableUrl } = await import("./media-proxy");
+      const { storeVideo } = await import("./video-store");
+      const media = await resolvePlayableUrl(presetId);
+      if (media.url) await storeVideo(presetId, tiktokId, media.url);
+    })
+    .catch(() => undefined);
+}
+
 export async function runDeepScanBatch(limit = 8, jobId?: string): Promise<DeepScanBatchReport> {
   const started = Date.now();
   const { scanPreset } = await import("./preset-store");
@@ -180,7 +213,8 @@ export async function runDeepScanBatch(limit = 8, jobId?: string): Promise<DeepS
     .where(
       sql`${presets.overallStatus} <> 'COMPLETE'
         and ${presets.discoverySource} is distinct from 'user_upload'
-        and (${presets.nextRetryAt} is null or ${presets.nextRetryAt} <= now())`,
+        and (${presets.nextRetryAt} is null or ${presets.nextRetryAt} <= now())
+        and not (${presets.overallStatus} = 'SCANNING' and ${presets.lastScannedAt} > now() - interval '3 minutes')`,
     )
     .orderBy(
       sql`(case when ${presets.xmlStatus} = 'FOUND' or ${presets.fiveMbStatus} = 'FOUND' then 1 else 0 end) asc`,
@@ -200,79 +234,77 @@ export async function runDeepScanBatch(limit = 8, jobId?: string): Promise<DeepS
     details: [],
   };
 
-  const pace = Number(process.env.DEEP_SCAN_PACE_MS ?? 1200);
+  // Parallel workers with staggered starts: fast, but never a burst that trips the shared quota.
+  const concurrency = Math.min(Math.max(Number(process.env.DEEP_SCAN_CONCURRENCY ?? 4), 1), 8);
+  const pace = Number(process.env.DEEP_SCAN_PACE_MS ?? 250);
+  const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+  let cursor = 0;
   let rateLimitHits = 0;
+  let stop = false;
+  let nextSlot = Date.now();
 
-  for (const [index, row] of rows.entries()) {
-    // Space the upstream calls out so a batch never trips the shared quota.
-    if (index > 0 && pace > 0) await new Promise((resolve) => setTimeout(resolve, pace));
+  const worker = async () => {
+    while (!stop) {
+      const index = cursor++;
+      if (index >= rows.length) return;
+      const row = rows[index]!;
 
-    try {
-      const result = await scanPreset(row.id, jobId);
-      report.scanned += 1;
+      const slot = Math.max(Date.now(), nextSlot);
+      nextSlot = slot + pace;
+      if (slot > Date.now()) await sleep(slot - Date.now());
+      if (stop) return;
 
-      // Permanent video archive in PostgreSQL (survives TikTok CDN expiry)
       try {
-        const { resolvePlayableUrl } = await import("./media-proxy");
-        const { storeVideo } = await import("./video-store");
-        const media = await resolvePlayableUrl(row.id);
-        if (media.url) {
-          const stored = await storeVideo(row.id, row.tiktokId, media.url);
-          if (stored.stored) {
+        const result = await scanPreset(row.id, jobId);
+        report.scanned += 1;
+
+        // Permanent video archive in PostgreSQL — in the background so it never slows the scan.
+        queueArchive(row.id, row.tiktokId);
+
+        const deepMsg = result.stages.find((stage) => stage.stage === "bimz_deep_scan")?.message ?? "";
+        if (/kuota|limit/i.test(deepMsg)) {
+          rateLimitHits += 1;
+          report.rateLimited += 1;
+          if (rateLimitHits >= 2) {
+            stop = true;
+            report.stoppedEarly = true;
             report.details.push({
               tiktokId: row.tiktokId,
-              status: "ARCHIVED",
-              xml: result.xmlUrl ? 1 : 0,
-              packages: result.fiveMbUrl ? 1 : 0,
-              message: `Video tersimpan permanen (${stored.sizeBytes ?? 0} bytes)`,
+              status: "RATE_LIMITED",
+              xml: 0,
+              packages: 0,
+              message: "Batch dihentikan: kuota RestAPI Bimz tercapai, preset dijadwalkan ulang otomatis.",
             });
+            return;
           }
+          await sleep(5000);
         }
-      } catch {
-        /* archive is best-effort */
+        const xml = result.xmlStatus === "FOUND" ? 1 : 0;
+        const pack = result.fiveMbStatus === "FOUND" ? 1 : 0;
+        report.withXml += xml;
+        report.withPackage += pack;
+        if (!xml && !pack) report.empty += 1;
+        report.details.push({
+          tiktokId: row.tiktokId,
+          status: result.overallStatus,
+          xml,
+          packages: pack,
+          message: deepMsg,
+        });
+      } catch (error) {
+        report.failed += 1;
+        report.details.push({
+          tiktokId: row.tiktokId,
+          status: "FAILED",
+          xml: 0,
+          packages: 0,
+          message: error instanceof Error ? error.message.slice(0, 160) : "unknown",
+        });
       }
-
-      const deepMsg = result.stages.find((stage) => stage.stage === "bimz_deep_scan")?.message ?? "";
-      if (/kuota|limit/i.test(deepMsg)) {
-        rateLimitHits += 1;
-        report.rateLimited += 1;
-        // Back off hard, then stop the batch instead of wasting the quota.
-        if (rateLimitHits >= 2) {
-          report.stoppedEarly = true;
-          report.details.push({
-            tiktokId: row.tiktokId,
-            status: "RATE_LIMITED",
-            xml: 0,
-            packages: 0,
-            message: "Batch dihentikan: kuota RestAPI Bimz tercapai, preset dijadwalkan ulang otomatis.",
-          });
-          break;
-        }
-        await new Promise((resolve) => setTimeout(resolve, 5000));
-      }
-      const xml = result.xmlStatus === "FOUND" ? 1 : 0;
-      const pack = result.fiveMbStatus === "FOUND" ? 1 : 0;
-      report.withXml += xml;
-      report.withPackage += pack;
-      if (!xml && !pack) report.empty += 1;
-      report.details.push({
-        tiktokId: row.tiktokId,
-        status: result.overallStatus,
-        xml,
-        packages: pack,
-        message: result.stages.find((stage) => stage.stage === "bimz_deep_scan")?.message ?? "",
-      });
-    } catch (error) {
-      report.failed += 1;
-      report.details.push({
-        tiktokId: row.tiktokId,
-        status: "FAILED",
-        xml: 0,
-        packages: 0,
-        message: error instanceof Error ? error.message.slice(0, 160) : "unknown",
-      });
     }
-  }
+  };
+
+  await Promise.all(Array.from({ length: Math.min(concurrency, rows.length) }, () => worker()));
 
   report.durationMs = Date.now() - started;
 

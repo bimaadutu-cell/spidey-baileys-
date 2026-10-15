@@ -429,7 +429,13 @@ async function runScanPreset(presetId: string, jobId?: string): Promise<ScanRepo
 
   /* ---------- Stage A + B: metadata + caption analysis ------------------ */
   setScanPhase(presetId, "metadata");
-  const meta = await fetchVideoMetadata(preset.videoUrl);
+  // FAST PATH: when the deep scanner already returned a verified XML (downloaded + parsed
+  // upstream) the slower heuristics add nothing — skip the extra metadata round-trip and
+  // the re-probing of stored links so the result is saved in one network call.
+  const deepSatisfied = deep.links.some((link) => link.verified && link.kind === "xml");
+  const meta: Awaited<ReturnType<typeof fetchVideoMetadata>> = deepSatisfied
+    ? ({ providers: [], video: null } as unknown as Awaited<ReturnType<typeof fetchVideoMetadata>>)
+    : await fetchVideoMetadata(preset.videoUrl);
   for (const provider of meta.providers) {
     await logAttempt({
       jobId,
@@ -473,7 +479,7 @@ async function runScanPreset(presetId: string, jobId?: string): Promise<ScanRepo
 
   // Seed candidates with links already stored (provider-scraped or from a previous
   // scan) so we validate real evidence instead of starting from zero every time.
-  const storedLinks = await loadStoredLinks(presetId);
+  const storedLinks = deepSatisfied ? [] : await loadStoredLinks(presetId);
   candidates.push(...storedLinks);
   stages.push({
     stage: "stored_links",

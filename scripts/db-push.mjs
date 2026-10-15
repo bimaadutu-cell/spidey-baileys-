@@ -196,7 +196,8 @@ async function sqlFallback(client) {
 /* ------------------------------------------------------------------ main */
 async function waitForDatabase() {
   let lastError;
-  for (let attempt = 1; attempt <= 5; attempt++) {
+  const retries = Number(process.env.DB_PUSH_RETRIES ?? (process.env.npm_lifecycle_event === "build" ? 2 : 5));
+  for (let attempt = 1; attempt <= retries; attempt++) {
     const probe = new pg.Client({ connectionString: url, ssl, connectionTimeoutMillis: 15_000 });
     try {
       await probe.connect();
@@ -210,7 +211,7 @@ async function waitForDatabase() {
       } catch {
         /* ignore */
       }
-      console.warn(`[db-push] database belum bisa dihubungi (percobaan ${attempt}/5): ${err?.message || err}`);
+      console.warn(`[db-push] database belum bisa dihubungi (percobaan ${attempt}/${retries}): ${err?.message || err}`);
       await new Promise((r) => setTimeout(r, attempt * 2000));
     }
   }
